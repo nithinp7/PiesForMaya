@@ -13,16 +13,19 @@
 #include <maya/MFnUnitAttribute.h>
 #include <maya/MGlobal.h>
 
+#include <Pies/Solver.h>
+
 #include <vector>
 #include <string>
 #include <iostream>
 
-#define McheckErr(stat,msg)			   \
-	if ( !stat ) {					   \
-		MGlobal::displayInfo(msg);     \
-		stat.perror(msg);              \
-		return stat;				   \
-	}
+#define McheckErr(stat, msg)   \
+  if (!stat)                   \
+  {                            \
+    MGlobal::displayInfo(msg); \
+    stat.perror(msg);          \
+    return stat;               \
+  }
 
 /*static*/
 MString SolverNode::pluginDir;
@@ -48,130 +51,138 @@ MObject SolverNode::grammar;
 /*static*/
 MObject SolverNode::outputMesh;
 
-MStatus SolverNode::compute(const MPlug& plug, MDataBlock& data) {
-	MStatus status = MStatus::kSuccess;
+MStatus SolverNode::compute(const MPlug &plug, MDataBlock &data)
+{
+  MStatus status = MStatus::kSuccess;
 
-	if (plug == outputMesh) {
-		MDataHandle outputHandle = data.outputValue(outputMesh, &status);
-		McheckErr(status, "ERROR getting output mesh handle.");
+  Pies::SolverOptions solverOptions{};
+  Pies::Solver solver(solverOptions);
+  solver.createTetBox(glm::vec3(0.0f), 1.0f, glm::vec3(0.0f), 1000.0f);
 
-		MDataHandle stepSizeHandle = data.inputValue(stepSize, &status);
-		McheckErr(status, "ERROR getting step size handle.");
+  if (plug == outputMesh)
+  {
+    MDataHandle outputHandle = data.outputValue(outputMesh, &status);
+    McheckErr(status, "ERROR getting output mesh handle.");
 
-		MDataHandle angleHandle = data.inputValue(angle, &status);
-		McheckErr(status, "ERROR getting angle handle.");
+    MDataHandle stepSizeHandle = data.inputValue(stepSize, &status);
+    McheckErr(status, "ERROR getting step size handle.");
 
-		MDataHandle itersHandle = data.inputValue(iterations, &status);
-		McheckErr(status, "ERROR getting iterations handle.");
+    MDataHandle angleHandle = data.inputValue(angle, &status);
+    McheckErr(status, "ERROR getting angle handle.");
 
-		MDataHandle grammarHandle = data.inputValue(grammar, &status);
-		McheckErr(status, "ERROR getting grammar handle.");
+    MDataHandle itersHandle = data.inputValue(iterations, &status);
+    McheckErr(status, "ERROR getting iterations handle.");
 
-		MDataHandle timeHandle = data.inputValue(time, &status);
-		McheckErr(status, "ERROR getting time handle.");
+    MDataHandle grammarHandle = data.inputValue(grammar, &status);
+    McheckErr(status, "ERROR getting grammar handle.");
 
-		double timeSeconds = timeHandle.asTime().asUnits(MTime::Unit::kSeconds);
+    MDataHandle timeHandle = data.inputValue(time, &status);
+    McheckErr(status, "ERROR getting time handle.");
 
-		float currentStepSize = stepSizeHandle.asFloat();
-		double currentAngle = angleHandle.asDouble();
-		int currentIters = itersHandle.asInt();
-		MString currentGrammar = grammarHandle.asString();
+    double timeSeconds = timeHandle.asTime().asUnits(MTime::Unit::kSeconds);
 
-		MFnMeshData meshCreator;
-		MObject meshData = meshCreator.create(&status);
-		McheckErr(status, "ERROR creating output mesh.");
+    float currentStepSize = stepSizeHandle.asFloat();
+    double currentAngle = angleHandle.asDouble();
+    int currentIters = itersHandle.asInt();
+    MString currentGrammar = grammarHandle.asString();
 
-		MPointArray points;
-		MIntArray faceCounts;
-		MIntArray faceConnects;
+    MFnMeshData meshCreator;
+    MObject meshData = meshCreator.create(&status);
+    McheckErr(status, "ERROR creating output mesh.");
 
-		MFnMesh mesh;
-		mesh.create(points.length(), faceCounts.length(), points, faceCounts, faceConnects, meshData, &status);
-		McheckErr(status, "ERROR reconstructing mesh.");
+    MPointArray points;
+    MIntArray faceCounts;
+    MIntArray faceConnects;
 
-		outputHandle.set(meshData);
-		data.setClean(plug);
+    MFnMesh mesh;
+    mesh.create(points.length(), faceCounts.length(), points, faceCounts, faceConnects, meshData, &status);
+    McheckErr(status, "ERROR reconstructing mesh.");
 
-		return MStatus::kSuccess;
-	}
+    outputHandle.set(meshData);
+    data.setClean(plug);
 
-	return MStatus::kUnknownParameter;
+    return MStatus::kSuccess;
+  }
+
+  return MStatus::kUnknownParameter;
 }
 
 /*static*/
-void* SolverNode::creator() {
-	return new SolverNode();
+void *SolverNode::creator()
+{
+  return new SolverNode();
 }
 
 /*static*/
-MStatus SolverNode::initialize() {
-	MStatus status = MStatus::kSuccess;
+MStatus SolverNode::initialize()
+{
+  MStatus status = MStatus::kSuccess;
 
-	MFnUnitAttribute timeAttr;
-	SolverNode::time = timeAttr.create("time", "t", MFnUnitAttribute::kTime, 0.0, &status);
-	McheckErr(status, "ERROR creating attribute SolverNode::time.");
+  MFnUnitAttribute timeAttr;
+  SolverNode::time = timeAttr.create("time", "t", MFnUnitAttribute::kTime, 0.0, &status);
+  McheckErr(status, "ERROR creating attribute SolverNode::time.");
 
-	timeAttr.setWritable(true);
-	status = addAttribute(SolverNode::time);
-	McheckErr(status, "ERROR adding attribute SolverNode::time.");
-	
-	MFnTypedAttribute grammarAttr;
-	SolverNode::grammar = grammarAttr.create("grammar", "grm", MFnStringData::kString, MObject::kNullObj, &status);
-	McheckErr(status, "ERROR creating attribute SolverNode::grammar.");
+  timeAttr.setWritable(true);
+  status = addAttribute(SolverNode::time);
+  McheckErr(status, "ERROR adding attribute SolverNode::time.");
 
-	grammarAttr.setWritable(true);
-	status = addAttribute(SolverNode::grammar);
-	McheckErr(status, "ERROR adding attribute SolverNode::grammar.");
-	
-	MFnNumericAttribute stepSizeAttr;
-	SolverNode::stepSize = stepSizeAttr.create("stepSize", "step", MFnNumericData::kFloat, 0.0, &status);
-	McheckErr(status, "ERROR creating attribute SolverNode::stepSize.");
+  MFnTypedAttribute grammarAttr;
+  SolverNode::grammar = grammarAttr.create("grammar", "grm", MFnStringData::kString, MObject::kNullObj, &status);
+  McheckErr(status, "ERROR creating attribute SolverNode::grammar.");
 
-	stepSizeAttr.setWritable(true);
-	status = addAttribute(SolverNode::stepSize);
-	McheckErr(status, "ERROR adding attribute SolverNode::stepSize.");
-	
-	MFnNumericAttribute angleAttr;
-	SolverNode::angle = angleAttr.create("angle", "ang", MFnNumericData::kDouble, 0.0, &status);
-	McheckErr(status, "ERROR creating attribute SolverNode::angle.");
+  grammarAttr.setWritable(true);
+  status = addAttribute(SolverNode::grammar);
+  McheckErr(status, "ERROR adding attribute SolverNode::grammar.");
 
-	angleAttr.setWritable(true);
-	status = addAttribute(SolverNode::angle);
-	McheckErr(status, "ERROR adding attribute SolverNode::angle.");
-	
-	MFnNumericAttribute itersAttr;
-	SolverNode::iterations = itersAttr.create("iterations", "iters", MFnNumericData::kInt, 0, &status);
-	McheckErr(status, "ERROR creating attribute SolverNode::iterations.");
+  MFnNumericAttribute stepSizeAttr;
+  SolverNode::stepSize = stepSizeAttr.create("stepSize", "step", MFnNumericData::kFloat, 0.0, &status);
+  McheckErr(status, "ERROR creating attribute SolverNode::stepSize.");
 
-	itersAttr.setWritable(true);
-	status = addAttribute(SolverNode::iterations);
-	McheckErr(status, "ERROR adding attribute SolverNode::iterations.");
+  stepSizeAttr.setWritable(true);
+  status = addAttribute(SolverNode::stepSize);
+  McheckErr(status, "ERROR adding attribute SolverNode::stepSize.");
 
-	MFnTypedAttribute outputMeshAttr;
-	SolverNode::outputMesh = outputMeshAttr.create("outputMesh", "out", MFnMeshData::kMesh, MObject::kNullObj, &status);
-	McheckErr(status, "ERROR creating attribute SolverNode::outputMesh.");
+  MFnNumericAttribute angleAttr;
+  SolverNode::angle = angleAttr.create("angle", "ang", MFnNumericData::kDouble, 0.0, &status);
+  McheckErr(status, "ERROR creating attribute SolverNode::angle.");
 
-	outputMeshAttr.setReadable(true);
-	outputMeshAttr.setWritable(false);
-	outputMeshAttr.setStorable(true);
-	status = addAttribute(SolverNode::outputMesh);
-	McheckErr(status, "ERROR adding attribute SolverNode::outputMesh.");
+  angleAttr.setWritable(true);
+  status = addAttribute(SolverNode::angle);
+  McheckErr(status, "ERROR adding attribute SolverNode::angle.");
 
-	// Setup input-output dependencies
-	status = attributeAffects(time, outputMesh);
-	McheckErr(status, "ERROR attributeAffects(time, outputMesh).");
+  MFnNumericAttribute itersAttr;
+  SolverNode::iterations = itersAttr.create("iterations", "iters", MFnNumericData::kInt, 0, &status);
+  McheckErr(status, "ERROR creating attribute SolverNode::iterations.");
 
-	status = attributeAffects(stepSize, outputMesh);
-	McheckErr(status, "ERROR attributeAffects(stepSize, outputMesh).");
+  itersAttr.setWritable(true);
+  status = addAttribute(SolverNode::iterations);
+  McheckErr(status, "ERROR adding attribute SolverNode::iterations.");
 
-	status = attributeAffects(angle, outputMesh);
-	McheckErr(status, "ERROR attributeAffects(angle, outputMesh).");
+  MFnTypedAttribute outputMeshAttr;
+  SolverNode::outputMesh = outputMeshAttr.create("outputMesh", "out", MFnMeshData::kMesh, MObject::kNullObj, &status);
+  McheckErr(status, "ERROR creating attribute SolverNode::outputMesh.");
 
-	status = attributeAffects(grammar, outputMesh);
-	McheckErr(status, "ERROR attributeAffects(grammar, outputMesh).");
+  outputMeshAttr.setReadable(true);
+  outputMeshAttr.setWritable(false);
+  outputMeshAttr.setStorable(true);
+  status = addAttribute(SolverNode::outputMesh);
+  McheckErr(status, "ERROR adding attribute SolverNode::outputMesh.");
 
-	status = attributeAffects(iterations, outputMesh);
-	McheckErr(status, "ERROR attributeAffects(iterations, outputMesh).");
+  // Setup input-output dependencies
+  status = attributeAffects(time, outputMesh);
+  McheckErr(status, "ERROR attributeAffects(time, outputMesh).");
 
-	return status;
+  status = attributeAffects(stepSize, outputMesh);
+  McheckErr(status, "ERROR attributeAffects(stepSize, outputMesh).");
+
+  status = attributeAffects(angle, outputMesh);
+  McheckErr(status, "ERROR attributeAffects(angle, outputMesh).");
+
+  status = attributeAffects(grammar, outputMesh);
+  McheckErr(status, "ERROR attributeAffects(grammar, outputMesh).");
+
+  status = attributeAffects(iterations, outputMesh);
+  McheckErr(status, "ERROR attributeAffects(iterations, outputMesh).");
+
+  return status;
 }
