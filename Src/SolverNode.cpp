@@ -57,7 +57,7 @@ MStatus SolverNode::compute(const MPlug &plug, MDataBlock &data)
 
   Pies::SolverOptions solverOptions{};
   Pies::Solver solver(solverOptions);
-  solver.createTetBox(glm::vec3(0.0f), 1.0f, glm::vec3(0.0f), 1000.0f);
+  solver.createTetBox(glm::vec3(0.0f), 1.0f, glm::vec3(0.0f), 1000.0f, 1.0f, true);
 
   if (plug == outputMesh)
   {
