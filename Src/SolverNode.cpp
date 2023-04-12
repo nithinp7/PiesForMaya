@@ -58,16 +58,65 @@ MObject SolverNode::ouptutPositions;
 SolverNode::SolverNode() {
   Pies::SolverOptions options{};
   options.gridSpacing = 1.0f;
-  options.floorHeight = -8.0f;
+  options.floorHeight = 0.0f;
+  options.fixedTimestepSize = 1.0f / 60.0f;
+  options.timeSubsteps = 1;
 
   this->_pSolver = std::make_unique<Pies::Solver>(options);
   this->_pSolver->createTetBox(
-      glm::vec3(0.0f),
+      glm::vec3(0.0f, 30.0f, 0.0f),
       1.0f,
       glm::vec3(0.0f),
       1000.0f,
       1.0f,
       true);
+
+  this->_pSolver->createTetBox(
+      glm::vec3(0.0f, 40.0f, 0.0f),
+      2.0f,
+      glm::vec3(0.0f),
+      1000.0f,
+      1.0f,
+      false);
+  this->_pSolver->createTetBox(
+      glm::vec3(10.0f, 40.0f, 0.0f),
+      2.0f,
+      glm::vec3(0.0f),
+      1000.0f,
+      1.0f,
+      false);
+  this->_pSolver->createTetBox(
+      glm::vec3(-10.0f, 40.0f, 0.0f),
+      2.0f,
+      glm::vec3(0.0f),
+      1000.0f,
+      1.0f,
+      false);
+
+  this->_pSolver->createTetBox(
+      glm::vec3(0.0f, 40.0f, 10.0f),
+      2.0f,
+      glm::vec3(0.0f),
+      1000.0f,
+      1.0f,
+      false);
+  this->_pSolver->createTetBox(
+      glm::vec3(10.0f, 40.0f, 10.0f),
+      2.0f,
+      glm::vec3(0.0f),
+      1000.0f,
+      1.0f,
+      false);
+  this->_pSolver->createTetBox(
+      glm::vec3(-10.0f, 40.0f, 10.0f),
+      2.0f,
+      glm::vec3(0.0f),
+      1000.0f,
+      1.0f,
+      false);
+      
+  this->_pSolver
+      ->createSheet(glm::vec3(-20.0f, 20.0f, -20.0f), 1.0f, 1.0f, 1000000.0f);
 }
 
 MStatus SolverNode::compute(const MPlug& plug, MDataBlock& data) {
@@ -175,7 +224,7 @@ void SolverNode::getCacheSetup(
   if (requestSimulation) {
     // Request simulation support
     setupInfo.setRequirement(MNodeCacheSetupInfo::kSimulationSupport, true);
-		setupInfo.setPreference(MNodeCacheSetupInfo::kWantToCacheByDefault, true);
+    setupInfo.setPreference(MNodeCacheSetupInfo::kWantToCacheByDefault, true);
   }
 }
 
