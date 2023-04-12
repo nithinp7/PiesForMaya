@@ -42,6 +42,9 @@ MObject SolverNode::time;
 MObject SolverNode::prevTime;
 
 /*static*/
+MObject SolverNode::inputMesh;
+
+/*static*/
 MObject SolverNode::stepSize;
 
 /*static*/
@@ -130,6 +133,9 @@ MStatus SolverNode::compute(const MPlug& plug, MDataBlock& data) {
     MDataHandle outputPrevTimeHandle = data.outputValue(prevTime, &status);
     McheckErr(status, "ERROR getting output prevTime handle.");
 
+    MDataHandle inputMeshHandle = data.inputValue(inputMesh, &status);
+    McheckErr(status, "ERROR getting output inputMesh handle.");
+
     MDataHandle stepSizeHandle = data.inputValue(stepSize, &status);
     McheckErr(status, "ERROR getting step size handle.");
 
@@ -149,6 +155,8 @@ MStatus SolverNode::compute(const MPlug& plug, MDataBlock& data) {
     MTime currentTime = timeHandle.asTime();
     const MTime previousTime = prevTimeHandle.asTime();
 
+    MFnMesh inputMesh = inputMeshHandle.asMesh();
+
     // if (currentTime == previousTime) {
     //   // TODO: ??
     //   data.setClean(ouptutPositions);
@@ -160,6 +168,18 @@ MStatus SolverNode::compute(const MPlug& plug, MDataBlock& data) {
     bool simulationEnabledValue = simulationEnabledHandle.asBool();
     float currentStepSize = stepSizeHandle.asFloat();
     int currentIters = itersHandle.asInt();
+    
+    // Add mesh to Pies if simulation is disabled
+    if (!simulationEnabledValue) {
+      MPointArray meshVerts;
+      inputMesh.getPoints(meshVerts);
+
+      for (int i = 0; i < meshVerts.length(); ++i) {
+        //Add vertices to Pies as unconnected nodes
+        continue;
+      }
+    }
+
 
     if (simulationEnabledValue && this->_simulationTime < timeSeconds) {
       // TODO: Is this correct??
