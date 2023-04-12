@@ -7,6 +7,7 @@
 #include <maya/MFnMeshData.h>
 #include <maya/MFnNumericAttribute.h>
 #include <maya/MFnStringData.h>
+#include <maya/MFnMeshData.h>
 #include <maya/MFnUnitAttribute.h>
 #include <maya/MGlobal.h>
 #include <maya/MIOStream.h>
@@ -323,6 +324,18 @@ MStatus SolverNode::initialize() {
   status = addAttribute(SolverNode::prevTime);
   McheckErr(status, "ERROR adding attribute SolverNode::prevTime.");
 
+  MFnTypedAttribute inputMeshAttr;
+  SolverNode::inputMesh =
+      inputMeshAttr.create("inputMesh", "mesh", MFnMeshData::kMesh, MObject::kNullObj, &status);
+  McheckErr(status, "ERROR creating attribute SolverNode::inputMesh.");
+
+  inputMeshAttr.setWritable(true);
+  inputMeshAttr.setStorable(true);
+  inputMeshAttr.setReadable(true);
+  inputMeshAttr.setKeyable(true);
+  status = addAttribute(SolverNode::inputMesh);
+  McheckErr(status, "ERROR adding attribute SolverNode::inputMesh.");
+
   MFnNumericAttribute stepSizeAttr;
   SolverNode::stepSize =
       stepSizeAttr
@@ -390,6 +403,9 @@ MStatus SolverNode::initialize() {
   // Setup input-output dependencies
   status = attributeAffects(time, ouptutPositions);
   McheckErr(status, "ERROR attributeAffects(time, ouptutPositions).");
+
+  status = attributeAffects(inputMesh, ouptutPositions);
+  McheckErr(status, "ERROR attributeAffects(inputMesh, ouptutPositions).");
 
   status = attributeAffects(stepSize, ouptutPositions);
   McheckErr(status, "ERROR attributeAffects(stepSize, ouptutPositions).");

@@ -34,6 +34,7 @@ public:
   static MTypeId id;
   static MObject time;
   static MObject prevTime;
+  static MObject inputMesh;
   static MObject stepSize;
   static MObject iterations;
   static MObject simulationEnabled;
