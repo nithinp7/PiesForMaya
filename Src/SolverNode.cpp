@@ -15,6 +15,7 @@
 #include <maya/MPoint.h>
 #include <maya/MPointArray.h>
 #include <maya/MStatus.h>
+#include <maya/MMatrix.h>
 
 #include <cstdint>
 #include <iostream>
@@ -53,39 +54,35 @@ MObject SolverNode::simulationEnabled;
 MObject SolverNode::simulationStartTime;
 
 /*static*/
+MObject SolverNode::meshArray;
+
+/*static*/
 MObject SolverNode::ouptutPositions;
 
-SolverNode::SolverNode() {
-  Pies::SolverOptions options{};
-  options.gridSpacing = 1.0f;
-  options.floorHeight = 0.0f;
-  options.fixedTimestepSize = 1.0f / 60.0f;
-  options.timeSubsteps = 1;
-
-  this->_pSolver = std::make_unique<Pies::Solver>(options);
-  this->_pSolver->createTetBox(
+static void setupTestScene(Pies::Solver& solver) {
+  solver.createTetBox(
       glm::vec3(0.0f, 30.0f, 0.0f),
-      1.0f,
+      1.5f,
       glm::vec3(0.0f),
       1000.0f,
       1.0f,
       true);
 
-  this->_pSolver->createTetBox(
+  solver.createTetBox(
       glm::vec3(0.0f, 40.0f, 0.0f),
       2.0f,
       glm::vec3(0.0f),
       1000.0f,
       1.0f,
       false);
-  this->_pSolver->createTetBox(
+  solver.createTetBox(
       glm::vec3(10.0f, 40.0f, 0.0f),
       2.0f,
       glm::vec3(0.0f),
       1000.0f,
       1.0f,
       false);
-  this->_pSolver->createTetBox(
+  solver.createTetBox(
       glm::vec3(-10.0f, 40.0f, 0.0f),
       2.0f,
       glm::vec3(0.0f),
@@ -93,30 +90,40 @@ SolverNode::SolverNode() {
       1.0f,
       false);
 
-  this->_pSolver->createTetBox(
+  solver.createTetBox(
       glm::vec3(0.0f, 40.0f, 10.0f),
       2.0f,
       glm::vec3(0.0f),
       1000.0f,
       1.0f,
       false);
-  this->_pSolver->createTetBox(
+  solver.createTetBox(
       glm::vec3(10.0f, 40.0f, 10.0f),
       2.0f,
       glm::vec3(0.0f),
       1000.0f,
       1.0f,
       false);
-  this->_pSolver->createTetBox(
+  solver.createTetBox(
       glm::vec3(-10.0f, 40.0f, 10.0f),
       2.0f,
       glm::vec3(0.0f),
       1000.0f,
       1.0f,
       false);
-      
-  this->_pSolver
-      ->createSheet(glm::vec3(-20.0f, 20.0f, -20.0f), 1.0f, 1.0f, 1000000.0f);
+
+  solver.createSheet(glm::vec3(-20.0f, 20.0f, -20.0f), 1.0f, 1.0f, 1000000.0f);
+}
+
+SolverNode::SolverNode() {
+  // Pies::SolverOptions options{};
+  // options.gridSpacing = 1.0f;
+  // options.floorHeight = 0.0f;
+  // options.fixedTimestepSize = 1.0f / 60.0f;
+  // options.timeSubsteps = 1;
+
+  // this->_pSolver = std::make_unique<Pies::Solver>(options);
+  // setupTestScene(*this->_pSolver);
 }
 
 MStatus SolverNode::compute(const MPlug& plug, MDataBlock& data) {
@@ -145,14 +152,15 @@ MStatus SolverNode::compute(const MPlug& plug, MDataBlock& data) {
         data.inputValue(simulationEnabled, &status);
     McheckErr(status, "ERROR getting simulationEnabledHandle handle.");
 
+    MDataHandle simulationStartTimeHandle =
+        data.inputValue(simulationStartTime, &status);
+    McheckErr(status, "ERROR getting simulationStartTimeHandle handle.");
+
+    MArrayDataHandle meshArrayHandle = data.inputArrayValue(meshArray, &status);
+    McheckErr(status, "ERROR getting meshArray handle.");
+
     MTime currentTime = timeHandle.asTime();
     const MTime previousTime = prevTimeHandle.asTime();
-
-    // if (currentTime == previousTime) {
-    //   // TODO: ??
-    //   data.setClean(ouptutPositions);
-    //   return MStatus::kSuccess;
-    // }
 
     double timeSeconds = currentTime.asUnits(MTime::Unit::kSeconds);
 
@@ -160,8 +168,47 @@ MStatus SolverNode::compute(const MPlug& plug, MDataBlock& data) {
     float currentStepSize = stepSizeHandle.asFloat();
     int currentIters = itersHandle.asInt();
 
+    // The time check should technically not be necessary
+    if (this->_resetSimulation) {
+      this->_simulationTime = 0.0f;
+      this->_resetSimulation = false;
+
+      Pies::SolverOptions options{};
+      options.gridSpacing = 1.0f;
+      options.floorHeight = 0.0f;
+      options.fixedTimestepSize = 1.0f / 60.0f;
+      options.timeSubsteps = 1;
+
+      this->_pSolver = std::make_unique<Pies::Solver>(options);
+      setupTestScene(*this->_pSolver);
+
+      std::vector<glm::vec3> newNodes;
+      MPointArray pointArr;
+      for (uint32_t meshIndex = 0; meshIndex < meshArrayHandle.elementCount();
+           ++meshIndex) {
+        MFnMesh mesh = meshArrayHandle.inputValue().asMesh();
+        const MMatrix& transform = mesh.transformationMatrix();
+        mesh.getPoints(pointArr);
+        newNodes.resize(pointArr.length());
+
+        for (uint32_t pointIndex = 0; pointIndex < pointArr.length();
+             ++pointIndex) {
+          MPoint point = transform * pointArr[pointIndex];
+          newNodes[pointIndex] = glm::vec3(
+              static_cast<float>(point.x),
+              static_cast<float>(point.y),
+              static_cast<float>(point.z));
+        }
+
+        this->_pSolver->addNodes(newNodes);
+
+        pointArr.clear();
+        newNodes.clear();
+        meshArrayHandle.next();
+      }
+    }
+
     if (simulationEnabledValue && this->_simulationTime < timeSeconds) {
-      // TODO: Is this correct??
       this->_pSolver->tick(0.012f);
       this->_simulationTime = timeSeconds;
 
@@ -259,7 +306,9 @@ MTimeRange SolverNode::transformInvalidationRange(
   // Get the start time and whether simulation is enabled., but it should NOT be
   // animated, so it should be clean.
   MDataBlock data = const_cast<SolverNode*>(this)->forceCache();
-  if (!data.isClean(simulationStartTime) || !data.isClean(simulationEnabled)) {
+  if (!data.isClean(simulationStartTime) || !data.isClean(simulationEnabled) ||
+      !data.isClean(meshArray)) {
+    this->_resetSimulation = true;
     return MTimeRange{kMinimumTime, kMaximumTime};
   }
 
@@ -284,6 +333,7 @@ MTimeRange SolverNode::transformInvalidationRange(
     // We invalidate the whole simulation time range, because something in the
     // range was invalidated, therefore we have to recompute the whole
     // simulation.
+    this->_resetSimulation = true;
     return input | MTimeRange{simulationStartTime, simulationEndTime};
   } else {
     // Since the invalidation range does not touch the simulation,
@@ -371,6 +421,22 @@ MStatus SolverNode::initialize() {
   status = addAttribute(SolverNode::simulationStartTime);
   McheckErr(status, "ERROR adding attribute SolverNode::simulationStartTime.");
 
+  MFnTypedAttribute meshArrayAttr;
+  SolverNode::meshArray = meshArrayAttr.create(
+      "meshArray",
+      "meshes",
+      MFnData::kMesh,
+      MObject::kNullObj,
+      &status);
+  McheckErr(status, "ERROR creating attribute SolverNode::meshArray.");
+
+  meshArrayAttr.setWritable(true);
+  meshArrayAttr.setArray(true);
+  meshArrayAttr.setUsesArrayDataBuilder(true); // ??
+  meshArrayAttr.setIndexMatters(false);
+  status = addAttribute(SolverNode::meshArray);
+  McheckErr(status, "ERROR adding attribute SolverNode::meshArray.");
+
   MFnTypedAttribute outputPositionsAttr;
   SolverNode::ouptutPositions = outputPositionsAttr.create(
       "outputPositions",
@@ -403,6 +469,11 @@ MStatus SolverNode::initialize() {
       "ERROR attributeAffects(simulationEnabled, ouptutPositions).");
 
   status = attributeAffects(simulationStartTime, ouptutPositions);
+  McheckErr(
+      status,
+      "ERROR attributeAffects(simulationStartTime, ouptutPositions).");
+
+  status = attributeAffects(meshArray, ouptutPositions);
   McheckErr(
       status,
       "ERROR attributeAffects(simulationStartTime, ouptutPositions).");

@@ -39,9 +39,12 @@ public:
   static MObject simulationEnabled;
   static MObject simulationStartTime;
 
+  static MObject meshArray;
+
   static MObject ouptutPositions;
 
 private:
   std::unique_ptr<Pies::Solver> _pSolver;
+  mutable bool _resetSimulation = true;
   float _simulationTime = 0.0f;
 };
