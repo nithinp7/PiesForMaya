@@ -176,7 +176,7 @@ MStatus SolverNode::compute(const MPlug& plug, MDataBlock& data) {
 
       for (int i = 0; i < meshVerts.length(); ++i) {
         //Add vertices to Pies as unconnected nodes
-        continue;
+        MPoint currVert = meshVerts[i];
       }
     }
 
