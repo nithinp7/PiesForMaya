@@ -11,11 +11,11 @@
 #include <maya/MGlobal.h>
 #include <maya/MIOStream.h>
 #include <maya/MIntArray.h>
+#include <maya/MMatrix.h>
 #include <maya/MNodeCacheDisablingInfoHelper.h>
 #include <maya/MPoint.h>
 #include <maya/MPointArray.h>
 #include <maya/MStatus.h>
-#include <maya/MMatrix.h>
 
 #include <cstdint>
 #include <iostream>
@@ -68,51 +68,51 @@ static void setupTestScene(Pies::Solver& solver) {
       1.0f,
       true);
 
-  solver.createTetBox(
-      glm::vec3(0.0f, 40.0f, 0.0f),
-      2.0f,
-      glm::vec3(0.0f),
-      1000.0f,
-      1.0f,
-      false);
-  solver.createTetBox(
-      glm::vec3(10.0f, 40.0f, 0.0f),
-      2.0f,
-      glm::vec3(0.0f),
-      1000.0f,
-      1.0f,
-      false);
-  solver.createTetBox(
-      glm::vec3(-10.0f, 40.0f, 0.0f),
-      2.0f,
-      glm::vec3(0.0f),
-      1000.0f,
-      1.0f,
-      false);
+  // solver.createTetBox(
+  //     glm::vec3(0.0f, 40.0f, 0.0f),
+  //     2.0f,
+  //     glm::vec3(0.0f),
+  //     1000.0f,
+  //     1.0f,
+  //     false);
+  // solver.createTetBox(
+  //     glm::vec3(10.0f, 40.0f, 0.0f),
+  //     2.0f,
+  //     glm::vec3(0.0f),
+  //     1000.0f,
+  //     1.0f,
+  //     false);
+  // solver.createTetBox(
+  //     glm::vec3(-10.0f, 40.0f, 0.0f),
+  //     2.0f,
+  //     glm::vec3(0.0f),
+  //     1000.0f,
+  //     1.0f,
+  //     false);
 
-  solver.createTetBox(
-      glm::vec3(0.0f, 40.0f, 10.0f),
-      2.0f,
-      glm::vec3(0.0f),
-      1000.0f,
-      1.0f,
-      false);
-  solver.createTetBox(
-      glm::vec3(10.0f, 40.0f, 10.0f),
-      2.0f,
-      glm::vec3(0.0f),
-      1000.0f,
-      1.0f,
-      false);
-  solver.createTetBox(
-      glm::vec3(-10.0f, 40.0f, 10.0f),
-      2.0f,
-      glm::vec3(0.0f),
-      1000.0f,
-      1.0f,
-      false);
+  // solver.createTetBox(
+  //     glm::vec3(0.0f, 40.0f, 10.0f),
+  //     2.0f,
+  //     glm::vec3(0.0f),
+  //     1000.0f,
+  //     1.0f,
+  //     false);
+  // solver.createTetBox(
+  //     glm::vec3(10.0f, 40.0f, 10.0f),
+  //     2.0f,
+  //     glm::vec3(0.0f),
+  //     1000.0f,
+  //     1.0f,
+  //     false);
+  // solver.createTetBox(
+  //     glm::vec3(-10.0f, 40.0f, 10.0f),
+  //     2.0f,
+  //     glm::vec3(0.0f),
+  //     1000.0f,
+  //     1.0f,
+  //     false);
 
-  solver.createSheet(glm::vec3(-20.0f, 20.0f, -20.0f), 1.0f, 1.0f, 1000000.0f);
+  solver.createSheet(glm::vec3(-20.0f, 20.0f, -20.0f), 1.0f, 1.0f, 10000.0f);
 }
 
 SolverNode::SolverNode() {}
@@ -173,28 +173,45 @@ MStatus SolverNode::compute(const MPlug& plug, MDataBlock& data) {
       this->_pSolver = std::make_unique<Pies::Solver>(options);
       setupTestScene(*this->_pSolver);
 
-      std::vector<glm::vec3> newNodes;
+      std::vector<glm::vec3> vertices;
+      std::vector<uint32_t> indices;
       MPointArray pointArr;
+      // TODO: Actually inform tetgen of coplanar triangles (belonging to same
+      // polygon)
+      MIntArray triCountPerPoly;
+      MIntArray triIndices;
       for (uint32_t meshIndex = 0; meshIndex < meshArrayHandle.elementCount();
            ++meshIndex) {
         MFnMesh mesh = meshArrayHandle.inputValue().asMesh();
         const MMatrix& transform = mesh.transformationMatrix();
         mesh.getPoints(pointArr);
-        newNodes.resize(pointArr.length());
+        mesh.getTriangles(triCountPerPoly, triIndices);
+        vertices.resize(pointArr.length());
+        indices.resize(triIndices.length());
 
         for (uint32_t pointIndex = 0; pointIndex < pointArr.length();
              ++pointIndex) {
           MPoint point = transform * pointArr[pointIndex];
-          newNodes[pointIndex] = glm::vec3(
+          vertices[pointIndex] = glm::vec3(
               static_cast<float>(point.x),
               static_cast<float>(point.y),
               static_cast<float>(point.z));
         }
 
-        this->_pSolver->addNodes(newNodes);
+        for (uint32_t i = 0; i < triIndices.length(); i += 3) {
+          indices[i] = static_cast<uint32_t>(triIndices[i]);
+          indices[i + 1] = static_cast<uint32_t>(triIndices[i + 1]);
+          indices[i + 2] = static_cast<uint32_t>(triIndices[i + 2]);
+        }
+
+        // this->_pSolver->addNodes(vertices);
+        this->_pSolver->addTriMeshVolume(vertices, indices, 1000.0f);
 
         pointArr.clear();
-        newNodes.clear();
+        triCountPerPoly.clear();
+        triIndices.clear();
+        vertices.clear();
+        indices.clear();
         meshArrayHandle.next();
       }
     }
