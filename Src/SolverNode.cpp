@@ -115,16 +115,7 @@ static void setupTestScene(Pies::Solver& solver) {
   solver.createSheet(glm::vec3(-20.0f, 20.0f, -20.0f), 1.0f, 1.0f, 1000000.0f);
 }
 
-SolverNode::SolverNode() {
-  // Pies::SolverOptions options{};
-  // options.gridSpacing = 1.0f;
-  // options.floorHeight = 0.0f;
-  // options.fixedTimestepSize = 1.0f / 60.0f;
-  // options.timeSubsteps = 1;
-
-  // this->_pSolver = std::make_unique<Pies::Solver>(options);
-  // setupTestScene(*this->_pSolver);
-}
+SolverNode::SolverNode() {}
 
 MStatus SolverNode::compute(const MPlug& plug, MDataBlock& data) {
   MStatus status = MStatus::kSuccess;
