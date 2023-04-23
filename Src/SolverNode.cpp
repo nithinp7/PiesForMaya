@@ -57,16 +57,19 @@ MObject SolverNode::simulationStartTime;
 MObject SolverNode::meshArray;
 
 /*static*/
-MObject SolverNode::ouptutPositions;
+MObject SolverNode::outputPositions;
+
+/*static*/
+MObject SolverNode::outputMesh;
 
 static void setupTestScene(Pies::Solver& solver) {
-  solver.createTetBox(
-      glm::vec3(0.0f, 30.0f, 0.0f),
-      1.5f,
-      glm::vec3(0.0f),
-      1000.0f,
-      1.0f,
-      true);
+  // solver.createTetBox(
+  //     glm::vec3(0.0f, 30.0f, 0.0f),
+  //     1.5f,
+  //     glm::vec3(0.0f),
+  //     1000.0f,
+  //     1.0f,
+  //     true);
 
   // solver.createTetBox(
   //     glm::vec3(0.0f, 40.0f, 0.0f),
@@ -112,7 +115,7 @@ static void setupTestScene(Pies::Solver& solver) {
   //     1.0f,
   //     false);
 
-  solver.createSheet(glm::vec3(-20.0f, 20.0f, -20.0f), 1.0f, 1.0f, 10000.0f);
+  solver.createSheet(glm::vec3(0.0f, 20.0f, 0.0f), 2.0f, 1.0f, 800.0f);
 }
 
 SolverNode::SolverNode() {}
@@ -120,9 +123,12 @@ SolverNode::SolverNode() {}
 MStatus SolverNode::compute(const MPlug& plug, MDataBlock& data) {
   MStatus status = MStatus::kSuccess;
 
-  if (plug == ouptutPositions) {
-    MDataHandle outputHandle = data.outputValue(ouptutPositions, &status);
+  if (plug == outputPositions || plug == outputMesh) {
+    MDataHandle outputHandle = data.outputValue(outputPositions, &status);
     McheckErr(status, "ERROR getting output positions handle.");
+
+    MDataHandle outMeshHandle = data.outputValue(outputMesh, &status);
+    McheckErr(status, "ERROR getting output mesh handle.");
 
     MDataHandle outputPrevTimeHandle = data.outputValue(prevTime, &status);
     McheckErr(status, "ERROR getting output prevTime handle.");
@@ -228,10 +234,24 @@ MStatus SolverNode::compute(const MPlug& plug, MDataBlock& data) {
 
       const std::vector<Pies::Solver::Vertex> piesVerts =
           this->_pSolver->getVertices();
+      const std::vector<Pies::Triangle> piesTris =
+          this->_pSolver->getTriangles();
 
       particlesPosArr.setLength(piesVerts.size());
       particlesScaleArr.setLength(piesVerts.size());
       particlesIdArr.setLength(piesVerts.size());
+
+      MFnMeshData meshCreator;
+      MObject meshData = meshCreator.create(&status);
+      McheckErr(status, "ERROR creating output mesh.");
+
+      MPointArray points;
+      MIntArray faceCounts;
+      MIntArray faceConnects;
+
+      points.setLength(piesVerts.size());
+      faceCounts.setLength(piesTris.size());
+      faceConnects.setLength(3 * piesTris.size());
 
       for (size_t i = 0; i < piesVerts.size(); ++i) {
         const Pies::Solver::Vertex& vertex = piesVerts[i];
@@ -241,12 +261,37 @@ MStatus SolverNode::compute(const MPlug& plug, MDataBlock& data) {
             MVector(vertex.position.x, vertex.position.y, vertex.position.z);
         particlesScaleArr[i] =
             MVector(vertex.radius, vertex.radius, vertex.radius);
+
+        points[i] =
+            MPoint(vertex.position.x, vertex.position.y, vertex.position.z);
       }
 
+      for (size_t i = 0; i < piesTris.size(); ++i) {
+        const Pies::Triangle& triangle = piesTris[i];
+
+        faceCounts[i] = 3;
+        faceConnects[3 * i] = triangle.nodeIds[0];
+        faceConnects[3 * i + 1] = triangle.nodeIds[1];
+        faceConnects[3 * i + 2] = triangle.nodeIds[2];
+      }
+
+      MFnMesh mesh;
+      mesh.create(
+          points.length(),
+          faceCounts.length(),
+          points,
+          faceCounts,
+          faceConnects,
+          meshData,
+          &status);
+		  McheckErr(status, "ERROR reconstructing mesh.");
+
+      outMeshHandle.set(meshData);
       outputHandle.setMObject(particlesObj);
     }
 
-    data.setClean(ouptutPositions);
+    data.setClean(outputPositions);
+    data.setClean(outputMesh);
 
     outputPrevTimeHandle.setMTime(currentTime);
     data.setClean(prevTime);
@@ -286,8 +331,12 @@ void SolverNode::getCacheSetup(
 void SolverNode::configCache(
     const MEvaluationNode& evalNode,
     MCacheSchema& schema) const {
-  if (evalNode.dirtyPlugExists(ouptutPositions)) {
-    schema.add(ouptutPositions);
+  if (evalNode.dirtyPlugExists(outputMesh)) {
+    schema.add(outputMesh);
+  }
+
+  if (evalNode.dirtyPlugExists(outputPositions)) {
+    schema.add(outputPositions);
   }
 }
 
@@ -446,7 +495,7 @@ MStatus SolverNode::initialize() {
   McheckErr(status, "ERROR adding attribute SolverNode::meshArray.");
 
   MFnTypedAttribute outputPositionsAttr;
-  SolverNode::ouptutPositions = outputPositionsAttr.create(
+  SolverNode::outputPositions = outputPositionsAttr.create(
       "outputPositions",
       "out",
       MFnData::kDynArrayAttrs,
@@ -458,33 +507,67 @@ MStatus SolverNode::initialize() {
   outputPositionsAttr.setWritable(false);
   outputPositionsAttr.setStorable(true);
   outputPositionsAttr.setCached(true);
-  status = addAttribute(SolverNode::ouptutPositions);
-  McheckErr(status, "ERROR adding attribute SolverNode::ouptutPositions.");
+  status = addAttribute(SolverNode::outputPositions);
+  McheckErr(status, "ERROR adding attribute SolverNode::outputPositions.");
+
+  MFnTypedAttribute outputMeshAttr;
+  SolverNode::outputMesh = outputMeshAttr.create(
+      "outputMesh",
+      "outMesh",
+      MFnData::kMesh,
+      MObject::kNullObj,
+      &status);
+  McheckErr(status, "ERROR creating attribute SolverNode::outputMesh.");
+
+  outputMeshAttr.setReadable(true);
+  outputMeshAttr.setWritable(false);
+  outputMeshAttr.setStorable(true);
+  outputMeshAttr.setCached(true);
+  status = addAttribute(SolverNode::outputMesh);
+  McheckErr(status, "ERROR adding attribute SolverNode::outputMesh.");
 
   // Setup input-output dependencies
-  status = attributeAffects(time, ouptutPositions);
-  McheckErr(status, "ERROR attributeAffects(time, ouptutPositions).");
+  status = attributeAffects(time, outputPositions);
+  McheckErr(status, "ERROR attributeAffects(time, outputPositions).");
 
-  status = attributeAffects(stepSize, ouptutPositions);
-  McheckErr(status, "ERROR attributeAffects(stepSize, ouptutPositions).");
+  status = attributeAffects(stepSize, outputPositions);
+  McheckErr(status, "ERROR attributeAffects(stepSize, outputPositions).");
 
-  status = attributeAffects(iterations, ouptutPositions);
-  McheckErr(status, "ERROR attributeAffects(iterations, ouptutPositions).");
+  status = attributeAffects(iterations, outputPositions);
+  McheckErr(status, "ERROR attributeAffects(iterations, outputPositions).");
 
-  status = attributeAffects(simulationEnabled, ouptutPositions);
+  status = attributeAffects(simulationEnabled, outputPositions);
   McheckErr(
       status,
-      "ERROR attributeAffects(simulationEnabled, ouptutPositions).");
+      "ERROR attributeAffects(simulationEnabled, outputPositions).");
 
-  status = attributeAffects(simulationStartTime, ouptutPositions);
+  status = attributeAffects(simulationStartTime, outputPositions);
   McheckErr(
       status,
-      "ERROR attributeAffects(simulationStartTime, ouptutPositions).");
+      "ERROR attributeAffects(simulationStartTime, outputPositions).");
 
-  status = attributeAffects(meshArray, ouptutPositions);
+  status = attributeAffects(meshArray, outputPositions);
   McheckErr(
       status,
-      "ERROR attributeAffects(simulationStartTime, ouptutPositions).");
+      "ERROR attributeAffects(simulationStartTime, outputPositions).");
 
+  // Setup input-output dependencies
+  status = attributeAffects(time, outputMesh);
+  McheckErr(status, "ERROR attributeAffects(time, outputMesh).");
+
+  status = attributeAffects(stepSize, outputMesh);
+  McheckErr(status, "ERROR attributeAffects(stepSize, outputMesh).");
+
+  status = attributeAffects(iterations, outputMesh);
+  McheckErr(status, "ERROR attributeAffects(iterations, outputMesh).");
+
+  status = attributeAffects(simulationEnabled, outputMesh);
+  McheckErr(status, "ERROR attributeAffects(simulationEnabled, outputMesh).");
+
+  status = attributeAffects(simulationStartTime, outputMesh);
+  McheckErr(status, "ERROR attributeAffects(simulationStartTime, outputMesh).");
+
+  status = attributeAffects(meshArray, outputMesh);
+  McheckErr(status, "ERROR attributeAffects(simulationStartTime, outputMesh).");
   return status;
 }

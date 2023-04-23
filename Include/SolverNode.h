@@ -41,7 +41,8 @@ public:
 
   static MObject meshArray;
 
-  static MObject ouptutPositions;
+  static MObject outputPositions;
+  static MObject outputMesh;
 
 private:
   std::unique_ptr<Pies::Solver> _pSolver;
