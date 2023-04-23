@@ -48,6 +48,33 @@ MObject SolverNode::stepSize;
 MObject SolverNode::iterations;
 
 /*static*/
+MObject SolverNode::collisionIterations;
+
+/*static*/
+MObject SolverNode::collisionDistance;
+
+/*static*/
+MObject SolverNode::collisionThickness;
+
+/*static*/
+MObject SolverNode::gridSpacing;
+
+/*static*/
+MObject SolverNode::gravity;
+
+/*static*/
+MObject SolverNode::damping;
+
+/*static*/
+MObject SolverNode::friction;
+
+/*static*/
+MObject SolverNode::floorHeight;
+
+/*static*/
+MObject SolverNode::threadCount;
+
+/*static*/
 MObject SolverNode::simulationEnabled;
 
 /*static*/
@@ -139,6 +166,33 @@ MStatus SolverNode::compute(const MPlug& plug, MDataBlock& data) {
     MDataHandle itersHandle = data.inputValue(iterations, &status);
     McheckErr(status, "ERROR getting iterations handle.");
 
+    MDataHandle colItersHandle = data.inputValue(collisionIterations, &status);
+    McheckErr(status, "ERROR getting collision iterations handle.");
+
+    MDataHandle colDistHandle = data.inputValue(collisionDistance, &status);
+    McheckErr(status, "ERROR getting collision distance handle.");
+
+    MDataHandle colThicknessHandle = data.inputValue(collisionThickness, &status);
+    McheckErr(status, "ERROR getting collision thickness handle.");
+
+    MDataHandle gridHandle = data.inputValue(gridSpacing, &status);
+    McheckErr(status, "ERROR getting grid spacing handle.");
+
+    MDataHandle gravityHandle = data.inputValue(gravity, &status);
+    McheckErr(status, "ERROR getting gravity handle.");
+    
+    MDataHandle dampingHandle = data.inputValue(damping, &status);
+    McheckErr(status, "ERROR getting damping handle.");
+
+    MDataHandle frictionHandle = data.inputValue(friction, &status);
+    McheckErr(status, "ERROR getting friction handle.");
+
+    MDataHandle floorHeightHandle = data.inputValue(floorHeight, &status);
+    McheckErr(status, "ERROR getting floorHeight handle.");
+
+    MDataHandle threadCountHandle = data.inputValue(threadCount, &status);
+    McheckErr(status, "ERROR getting threadCount handle.");
+
     MDataHandle timeHandle = data.inputValue(time, &status);
     McheckErr(status, "ERROR getting time handle.");
 
@@ -171,10 +225,17 @@ MStatus SolverNode::compute(const MPlug& plug, MDataBlock& data) {
       this->_resetSimulation = false;
 
       Pies::SolverOptions options{};
-      options.gridSpacing = 1.0f;
-      options.floorHeight = 0.0f;
-      options.fixedTimestepSize = 1.0f / 60.0f;
-      options.timeSubsteps = 1;
+      options.fixedTimestepSize = stepSizeHandle.asFloat();
+      options.iterations = itersHandle.asInt();
+      options.collisionStabilizationIterations = colItersHandle.asInt();
+      options.collisionThresholdDistance = colDistHandle.asFloat();
+      options.collisionThickness = colThicknessHandle.asFloat();
+      options.gridSpacing = gridHandle.asFloat();
+      options.gravity = gravityHandle.asFloat();
+      options.damping = dampingHandle.asFloat();
+      options.friction = frictionHandle.asFloat();
+      options.floorHeight = floorHeightHandle.asFloat();
+      options.threadCount = threadCountHandle.asInt();
 
       this->_pSolver = std::make_unique<Pies::Solver>(options);
       setupTestScene(*this->_pSolver);
@@ -363,8 +424,20 @@ MTimeRange SolverNode::transformInvalidationRange(
   // Get the start time and whether simulation is enabled., but it should NOT be
   // animated, so it should be clean.
   MDataBlock data = const_cast<SolverNode*>(this)->forceCache();
-  if (!data.isClean(simulationStartTime) || !data.isClean(simulationEnabled) ||
-      !data.isClean(meshArray)) {
+  if (!data.isClean(simulationStartTime) || 
+      !data.isClean(simulationEnabled) ||
+      !data.isClean(meshArray) ||
+      !data.isClean(stepSize) ||
+      !data.isClean(iterations) ||
+      !data.isClean(collisionIterations) ||
+      !data.isClean(collisionDistance) ||
+      !data.isClean(collisionThickness) ||
+      !data.isClean(gridSpacing) ||
+      !data.isClean(gravity) ||
+      !data.isClean(damping) ||
+      !data.isClean(friction) ||
+      !data.isClean(floorHeight) ||
+      !data.isClean(threadCount)) {
     this->_resetSimulation = true;
     return MTimeRange{kMinimumTime, kMaximumTime};
   }
@@ -433,7 +506,7 @@ MStatus SolverNode::initialize() {
   MFnNumericAttribute stepSizeAttr;
   SolverNode::stepSize =
       stepSizeAttr
-          .create("stepSize", "step", MFnNumericData::kFloat, 0.0, &status);
+          .create("stepSize", "step", MFnNumericData::kFloat, 0.012, &status);
   McheckErr(status, "ERROR creating attribute SolverNode::stepSize.");
 
   stepSizeAttr.setWritable(true);
@@ -442,7 +515,7 @@ MStatus SolverNode::initialize() {
 
   MFnNumericAttribute itersAttr;
   SolverNode::iterations =
-      itersAttr.create("iterations", "iters", MFnNumericData::kInt, 0, &status);
+      itersAttr.create("iterations", "iters", MFnNumericData::kInt, 4, &status);
   McheckErr(status, "ERROR creating attribute SolverNode::iterations.");
 
   itersAttr.setWritable(true);
@@ -493,6 +566,95 @@ MStatus SolverNode::initialize() {
   meshArrayAttr.setIndexMatters(false);
   status = addAttribute(SolverNode::meshArray);
   McheckErr(status, "ERROR adding attribute SolverNode::meshArray.");
+
+  
+  MFnNumericAttribute collisionItersAttr;
+  SolverNode::collisionIterations =
+      collisionItersAttr.create("collisionIterations", "cIters", MFnNumericData::kInt, 4, &status);
+  McheckErr(status, "ERROR creating attribute SolverNode::collisionIterations.");
+
+  collisionItersAttr.setWritable(true);
+  status = addAttribute(SolverNode::collisionIterations);
+  McheckErr(status, "ERROR adding attribute SolverNode::collisionIterations.");
+
+  MFnNumericAttribute collisionDistanceAttr;
+  SolverNode::collisionDistance =
+      collisionDistanceAttr
+          .create("collisionDistance", "cDist", MFnNumericData::kFloat, 0.1, &status);
+  McheckErr(status, "ERROR creating attribute SolverNode::collisionDistance.");
+
+  collisionDistanceAttr.setWritable(true);
+  status = addAttribute(SolverNode::collisionDistance);
+  McheckErr(status, "ERROR adding attribute SolverNode::collisionDistance.");
+
+  MFnNumericAttribute collisionThicknessAttr;
+  SolverNode::collisionThickness =
+      collisionThicknessAttr
+          .create("collisionThickness", "cThick", MFnNumericData::kFloat, 0.05, &status);
+  McheckErr(status, "ERROR creating attribute SolverNode::collisionThickness.");
+
+  collisionThicknessAttr.setWritable(true);
+  status = addAttribute(SolverNode::collisionThickness);
+  McheckErr(status, "ERROR adding attribute SolverNode::collisionThickness.");
+
+  MFnNumericAttribute gridSpacingAttr;
+  SolverNode::gridSpacing =
+      gridSpacingAttr
+          .create("gridSpacing", "grid", MFnNumericData::kFloat, 2.0, &status);
+  McheckErr(status, "ERROR creating attribute SolverNode::gridSpacing.");
+
+  gridSpacingAttr.setWritable(true);
+  status = addAttribute(SolverNode::gridSpacing);
+  McheckErr(status, "ERROR adding attribute SolverNode::gridSpacing.");
+  
+  MFnNumericAttribute gravityAttr;
+  SolverNode::gravity =
+      gravityAttr
+          .create("gravity", "g", MFnNumericData::kFloat, 10.0, &status);
+  McheckErr(status, "ERROR creating attribute SolverNode::gravity.");
+
+  gravityAttr.setWritable(true);
+  status = addAttribute(SolverNode::gravity);
+  McheckErr(status, "ERROR adding attribute SolverNode::gravity.");
+
+  MFnNumericAttribute dampingAttr;
+  SolverNode::damping =
+      dampingAttr
+          .create("damping", "d", MFnNumericData::kFloat, 0.006, &status);
+  McheckErr(status, "ERROR creating attribute SolverNode::damping.");
+
+  dampingAttr.setWritable(true);
+  status = addAttribute(SolverNode::damping);
+  McheckErr(status, "ERROR adding attribute SolverNode::damping.");
+
+  MFnNumericAttribute frictionAttr;
+  SolverNode::friction =
+      frictionAttr
+          .create("friction", "f", MFnNumericData::kFloat, 0.01, &status);
+  McheckErr(status, "ERROR creating attribute SolverNode::friction.");
+
+  frictionAttr.setWritable(true);
+  status = addAttribute(SolverNode::friction);
+  McheckErr(status, "ERROR adding attribute SolverNode::friction.");
+
+  MFnNumericAttribute floorAttr;
+  SolverNode::floorHeight =
+      floorAttr
+          .create("floorHeight", "floor", MFnNumericData::kFloat, 0.0, &status);
+  McheckErr(status, "ERROR creating attribute SolverNode::floorHeight.");
+
+  floorAttr.setWritable(true);
+  status = addAttribute(SolverNode::floorHeight);
+  McheckErr(status, "ERROR adding attribute SolverNode::floorHeight.");
+
+  MFnNumericAttribute threadCountAttr;
+  SolverNode::threadCount = 
+      threadCountAttr.create("threadCount", "threads", MFnNumericData::kInt, 8, &status);
+  McheckErr(status, "ERROR creating attribute SolverNode::threadCount.");
+
+  threadCountAttr.setWritable(true);
+  status = addAttribute(SolverNode::threadCount);
+  McheckErr(status, "ERROR adding attribute SolverNode::threadCount.");
 
   MFnTypedAttribute outputPositionsAttr;
   SolverNode::outputPositions = outputPositionsAttr.create(
@@ -551,6 +713,45 @@ MStatus SolverNode::initialize() {
       status,
       "ERROR attributeAffects(simulationStartTime, outputPositions).");
 
+  status = attributeAffects(collisionIterations, outputPositions);
+  McheckErr(status, "ERROR attributeAffects(collisionIterations, outputPositions).");
+
+  status = attributeAffects(collisionDistance, outputPositions);
+  McheckErr(status, "ERROR attributeAffects(collisionDistance, outputPositions).");
+
+  status = attributeAffects(collisionThickness, outputPositions);
+  McheckErr(status, "ERROR attributeAffects(collisionThickness, outputPositions).");
+
+  status = attributeAffects(gridSpacing, outputPositions);
+  McheckErr(
+      status,
+      "ERROR attributeAffects(gridSpacing, outputPositions).");
+
+  status = attributeAffects(gravity, outputPositions);
+  McheckErr(
+      status,
+      "ERROR attributeAffects(gravity, outputPositions).");
+
+  status = attributeAffects(damping, outputPositions);
+  McheckErr(
+      status,
+      "ERROR attributeAffects(damping, outputPositions).");
+
+  status = attributeAffects(friction, outputPositions);
+  McheckErr(
+      status,
+      "ERROR attributeAffects(friction, outputPositions).");
+
+  status = attributeAffects(floorHeight, outputPositions);
+  McheckErr(
+      status,
+      "ERROR attributeAffects(floorHeight, outputPositions).");
+      
+  status = attributeAffects(threadCount, outputPositions);
+  McheckErr(
+      status,
+      "ERROR attributeAffects(threadCount, outputPositions).");
+
   // Setup input-output dependencies
   status = attributeAffects(time, outputMesh);
   McheckErr(status, "ERROR attributeAffects(time, outputMesh).");
@@ -569,5 +770,44 @@ MStatus SolverNode::initialize() {
 
   status = attributeAffects(meshArray, outputMesh);
   McheckErr(status, "ERROR attributeAffects(simulationStartTime, outputMesh).");
+  
+  status = attributeAffects(collisionIterations, outputMesh);
+  McheckErr(status, "ERROR attributeAffects(collisionIterations, outputMesh).");
+
+  status = attributeAffects(collisionDistance, outputMesh);
+  McheckErr(status, "ERROR attributeAffects(collisionDistance, outputMesh).");
+
+  status = attributeAffects(collisionThickness, outputMesh);
+  McheckErr(status, "ERROR attributeAffects(collisionThickness, outputMesh).");
+
+  status = attributeAffects(gridSpacing, outputMesh);
+  McheckErr(
+      status,
+      "ERROR attributeAffects(gridSpacing, outputMesh).");
+
+  status = attributeAffects(gravity, outputMesh);
+  McheckErr(
+      status,
+      "ERROR attributeAffects(gravity, outputMesh).");
+
+  status = attributeAffects(damping, outputMesh);
+  McheckErr(
+      status,
+      "ERROR attributeAffects(damping, outputMesh).");
+
+  status = attributeAffects(friction, outputMesh);
+  McheckErr(
+      status,
+      "ERROR attributeAffects(friction, outputMesh).");
+
+  status = attributeAffects(floorHeight, outputMesh);
+  McheckErr(
+      status,
+      "ERROR attributeAffects(floorHeight, outputMesh).");
+      
+  status = attributeAffects(threadCount, outputMesh);
+  McheckErr(
+      status,
+      "ERROR attributeAffects(threadCount, outputMesh).");
   return status;
 }

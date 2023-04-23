@@ -34,8 +34,20 @@ public:
   static MTypeId id;
   static MObject time;
   static MObject prevTime;
+
   static MObject stepSize;
   static MObject iterations;
+  
+  static MObject collisionIterations;
+  static MObject collisionDistance;
+  static MObject collisionThickness;
+  static MObject gridSpacing;
+  static MObject gravity;
+  static MObject damping;
+  static MObject friction;
+  static MObject floorHeight;
+  static MObject threadCount;
+  
   static MObject simulationEnabled;
   static MObject simulationStartTime;
 
