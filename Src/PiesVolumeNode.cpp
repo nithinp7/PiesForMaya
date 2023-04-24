@@ -40,7 +40,14 @@ MObject PiesVolumeNode::outMesh;
 
 /*static*/
 MStatus PiesVolumeNode::compute(const MPlug& plug, MDataBlock& data) {
+  MStatus status = MStatus::kSuccess;
 
+  if (plug == outMesh) {
+    MDataHandle inMeshHandle = data.inputValue(inMesh, &status);
+    McheckErr(status, "ERROR getting inMesh handle.");
+
+    // inMeshHandle.asMeshTransformed
+  }
 }
 
 /*static*/

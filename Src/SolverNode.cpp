@@ -247,16 +247,17 @@ MStatus SolverNode::compute(const MPlug& plug, MDataBlock& data) {
       MIntArray triIndices;
       for (uint32_t meshIndex = 0; meshIndex < meshArrayHandle.elementCount();
            ++meshIndex) {
-        MFnMesh mesh = meshArrayHandle.inputValue().asMesh();
-        const MMatrix& transform = mesh.transformationMatrix();
-        mesh.getPoints(pointArr);
+        MDataHandle meshHandle = meshArrayHandle.inputValue();
+        const MMatrix& transform = meshHandle.geometryTransformMatrix();
+        MFnMesh mesh = meshHandle.asMesh();
+        mesh.getPoints(pointArr, MSpace::kWorld);
         mesh.getTriangles(triCountPerPoly, triIndices);
         vertices.resize(pointArr.length());
         indices.resize(triIndices.length());
 
         for (uint32_t pointIndex = 0; pointIndex < pointArr.length();
              ++pointIndex) {
-          MPoint point = transform * pointArr[pointIndex];
+          MPoint point = pointArr[pointIndex];
           vertices[pointIndex] = glm::vec3(
               static_cast<float>(point.x),
               static_cast<float>(point.y),
