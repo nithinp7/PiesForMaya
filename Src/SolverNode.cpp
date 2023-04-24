@@ -271,7 +271,8 @@ MStatus SolverNode::compute(const MPlug& plug, MDataBlock& data) {
         }
 
         // this->_pSolver->addNodes(vertices);
-        this->_pSolver->addTriMeshVolume(vertices, indices, 1000.0f);
+        // this->_pSolver->addTriMeshVolume(vertices, indices, 1000.0f);
+        this->_pSolver->addClothMesh(vertices, indices, 100.0f);
 
         pointArr.clear();
         triCountPerPoly.clear();
