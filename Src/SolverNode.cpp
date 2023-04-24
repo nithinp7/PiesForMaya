@@ -243,8 +243,6 @@ MStatus SolverNode::compute(const MPlug& plug, MDataBlock& data) {
       std::vector<glm::vec3> vertices;
       std::vector<uint32_t> indices;
       MPointArray pointArr;
-      // TODO: Actually inform tetgen of coplanar triangles (belonging to same
-      // polygon)
       MIntArray triCountPerPoly;
       MIntArray triIndices;
       for (uint32_t meshIndex = 0; meshIndex < meshArrayHandle.elementCount();
