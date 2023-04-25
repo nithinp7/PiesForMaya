@@ -1,5 +1,6 @@
 #pragma once
 
+#include <maya/MPxDeformerNode.h>
 #include <maya/MFnTypedAttribute.h>
 #include <maya/MFnUnitAttribute.h>
 #include <maya/MObject.h>
@@ -11,10 +12,14 @@
 #include <memory>
 #include <string>
 
-class PiesVolumeNode : public MPxNode {
+class PiesVolumeNode : public MPxDeformerNode {
 public:
   PiesVolumeNode();
-  MStatus compute(const MPlug& plug, MDataBlock& data) override;
+	MStatus	deform(MDataBlock& block,
+				   MItGeometry& iter,
+				   const MMatrix& mat,
+				   unsigned int	multiIndex) override;
+  // MStatus compute(const MPlug& plug, MDataBlock& data) override;
   static void* creator();
   static MStatus initialize();
 

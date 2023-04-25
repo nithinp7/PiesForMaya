@@ -50,6 +50,7 @@ target_link_libraries(${PROJECT_NAME} PUBLIC
     OpenMayaUI 
     Foundation 
     OpenMaya
+    MetaData
     Pies)
 set_target_properties(${PROJECT_NAME} PROPERTIES
     PREFIX ""
