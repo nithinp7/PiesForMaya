@@ -34,10 +34,10 @@ MStatus initializePlugin(MObject obj) {
   std::string pluginPath(SolverNode::pluginDir.asChar());
   // TODO: Add scripts from folder
 
-  // std::string scriptPath = pluginPath + "/../../LSystemMenu.mel";
-  // std::string addScriptPathCmd = "source \"" + scriptPath + "\";";
+  std::string scriptPath = pluginPath + "/../PiesMenu.mel";
+  std::string addScriptPathCmd = "source \"" + scriptPath + "\";";
 
-  // MGlobal::executeCommand(MString(addScriptPathCmd.c_str()));
+  MGlobal::executeCommand(MString(addScriptPathCmd.c_str()));
 
   status = plugin.registerNode(
       "SolverNode",
