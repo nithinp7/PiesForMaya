@@ -1,0 +1,58 @@
+global int $piesMeshCount;
+global string $piesSolverName;
+
+global proc int loadPiesR() {
+    loadPlugin "C:/Users/raikh/Desktop/Aboudi/PENN/SPRING23/CIS6600/AUTHORING/PiesForMaya/build/Release/PiesForMaya.mll";
+    return 1;
+}
+
+global proc int loadPiesD() {
+    loadPlugin "C:/Users/raikh/Desktop/Aboudi/PENN/SPRING23/CIS6600/AUTHORING/PiesForMaya/build/Debug/PiesForMaya.mll";
+    return 1;
+}
+
+global proc int unloadPies() {
+    flushUndo;
+    unloadPlugin "PiesForMaya.mll";
+    return 1;
+}
+
+global proc int createSolver() {
+    global int $piesMeshCount;
+
+    $piesMeshCount = 0;
+
+    polySphere; 
+    instancer; 
+    createNode SolverNode; 
+    connectAttr pSphere1.matrix instancer1.inputHierarchy[0];
+    connectAttr SolverNode1.outputPositions instancer1.inputPoints; 
+    connectAttr time1.outTime SolverNode1.time;
+
+    string $transform = `createNode transform -n "PiesSolver#"`;
+    string $mesh = `createNode mesh -n "PiesSolverShape#" -p $transform`;
+    sets -add initialShadingGroup $mesh;
+
+    // TODO: SolverNode1 should not be hardcoded... 
+    connectAttr SolverNode1.outputMesh ($mesh + ".inMesh");
+
+    return true;
+}
+
+global proc int addMesh() {
+    global int $piesMeshCount;
+
+    string $obj[] = `ls -sl`;
+    string $shapeNames[] = `listRelatives -s $obj[0]`;
+
+    for ($shapeName in $shapeNames) {
+        connectAttr ($shapeName + ".worldMesh") SolverNode1.meshArray[$piesMeshCount];
+        $piesMeshCount = $piesMeshCount + 1;
+    }
+
+    return true;
+}
+
+string $piesMenu = `menu -p $gMainWindow -label "Pies"`;
+    menuItem -label "Create Solver" -command "createSolver";
+    menuItem -label "Create Soft Body" -command "addMesh";
