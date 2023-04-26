@@ -18,6 +18,7 @@
 #include <maya/MPoint.h>
 #include <maya/MPointArray.h>
 #include <maya/MStatus.h>
+#include <maya/MFnCompoundAttribute.h>
 
 #include <cstdint>
 #include <iostream>
@@ -48,6 +49,21 @@ MObject SolverNode::stepSize;
 
 /*static*/
 MObject SolverNode::iterations;
+
+/*static*/
+MObject SolverNode::strainStiffness;
+/*static*/
+MObject SolverNode::minStrain;
+/*static*/
+MObject SolverNode::maxStrain;
+/*static*/
+MObject SolverNode::volStiffness;
+/*static*/
+MObject SolverNode::volMultiplier;
+/*static*/
+MObject SolverNode::softBodyMesh;
+/*static*/
+MObject SolverNode::softBodyArray;
 
 /*static*/
 MObject SolverNode::collisionIterations;
@@ -81,9 +97,6 @@ MObject SolverNode::simulationEnabled;
 
 /*static*/
 MObject SolverNode::simulationStartTime;
-
-/*static*/
-MObject SolverNode::meshArray;
 
 /*static*/
 MObject SolverNode::fixedRegionsArray;
@@ -161,8 +174,8 @@ MStatus SolverNode::compute(const MPlug& plug, MDataBlock& data) {
         data.inputValue(simulationStartTime, &status);
     McheckErr(status, "ERROR getting simulationStartTimeHandle handle.");
 
-    MArrayDataHandle meshArrayHandle = data.inputArrayValue(meshArray, &status);
-    McheckErr(status, "ERROR getting meshArray handle.");
+    MArrayDataHandle softBodyArrayHandle = data.inputArrayValue(softBodyArray, &status);
+    McheckErr(status, "ERROR getting softBodyArray handle.");
 
     MArrayDataHandle fixedRegionsHandle =
         data.inputArrayValue(fixedRegionsArray, &status);
@@ -232,9 +245,10 @@ MStatus SolverNode::compute(const MPlug& plug, MDataBlock& data) {
       MPointArray pointArr;
       MIntArray triCountPerPoly;
       MIntArray triIndices;
-      for (uint32_t meshIndex = 0; meshIndex < meshArrayHandle.elementCount();
-           ++meshIndex) {
-        MDataHandle meshHandle = meshArrayHandle.inputValue();
+      for (uint32_t softBodyIndex = 0; softBodyIndex < softBodyArrayHandle.elementCount();
+           ++softBodyIndex) {
+        MDataHandle softBodyHandle = softBodyArrayHandle.inputValue();
+        MDataHandle meshHandle = softBodyHandle.child(softBodyMesh);
         const MMatrix& transform = meshHandle.geometryTransformMatrix();
         MFnMesh mesh = meshHandle.asMesh();
         mesh.getPoints(pointArr, MSpace::kWorld);
@@ -258,14 +272,21 @@ MStatus SolverNode::compute(const MPlug& plug, MDataBlock& data) {
         }
 
         // this->_pSolver->addNodes(vertices);
-        this->_pSolver->addTriMeshVolume(vertices, indices, 1000.0f);
+        this->_pSolver->addTriMeshVolume(
+            vertices, 
+            indices, 
+            softBodyHandle.child(strainStiffness).asFloat(),
+            softBodyHandle.child(minStrain).asFloat(),
+            softBodyHandle.child(maxStrain).asFloat(),
+            softBodyHandle.child(volStiffness).asFloat(),
+            softBodyHandle.child(volMultiplier).asFloat());
 
         pointArr.clear();
         triCountPerPoly.clear();
         triIndices.clear();
         vertices.clear();
         indices.clear();
-        meshArrayHandle.next();
+        softBodyArrayHandle.next();
       }
 
       this->_pSolver->addFixedRegions(fixedRegions, 1000.0f);
@@ -413,7 +434,7 @@ MTimeRange SolverNode::transformInvalidationRange(
   // animated, so it should be clean.
   MDataBlock data = const_cast<SolverNode*>(this)->forceCache();
   if (!data.isClean(simulationStartTime) || !data.isClean(simulationEnabled) ||
-      !data.isClean(meshArray) || !data.isClean(stepSize) ||
+      !data.isClean(softBodyArray) || !data.isClean(stepSize) ||
       !data.isClean(iterations) || !data.isClean(collisionIterations) ||
       !data.isClean(collisionDistance) || !data.isClean(collisionThickness) ||
       !data.isClean(gridSpacing) || !data.isClean(gravity) ||
@@ -533,21 +554,83 @@ MStatus SolverNode::initialize() {
   status = addAttribute(SolverNode::simulationStartTime);
   McheckErr(status, "ERROR adding attribute SolverNode::simulationStartTime.");
 
-  MFnTypedAttribute meshArrayAttr;
-  SolverNode::meshArray = meshArrayAttr.create(
-      "meshArray",
-      "meshes",
+  // Soft body meshes (compound attribute array)
+  
+  MFnNumericAttribute strainAttr;
+  SolverNode::strainStiffness = strainAttr.create(
+      "strainStiffness",
+      "strainStiff",
+      MFnNumericData::kFloat,
+      1000.0,
+      &status);
+  McheckErr(status, "ERROR creating attribute SolverNode::strainStiffness.");
+
+  MFnNumericAttribute minStrainAttr;
+  SolverNode::minStrain =
+      minStrainAttr
+          .create("minStrain", "minS", MFnNumericData::kFloat, 0.8, &status);
+  McheckErr(status, "ERROR creating attribute SolverNode::minStrain.");
+
+  MFnNumericAttribute maxStrainAttr;
+  SolverNode::maxStrain =
+      maxStrainAttr
+          .create("maxStrain", "maxS", MFnNumericData::kFloat, 1.0, &status);
+  McheckErr(status, "ERROR creating attribute SolverNode::maxStrain.");
+
+  MFnNumericAttribute volStiffnessAttr;
+  SolverNode::volStiffness = volStiffnessAttr.create(
+      "volumeStiffness",
+      "volStiff",
+      MFnNumericData::kFloat,
+      1000.0,
+      &status);
+  McheckErr(status, "ERROR creating attribute SolverNode::volStiffness.");
+
+  MFnNumericAttribute volMultiplierAttr;
+  SolverNode::volMultiplier = volMultiplierAttr.create(
+      "volumeMultiplier",
+      "volMult",
+      MFnNumericData::kFloat,
+      1.0,
+      &status);
+  McheckErr(status, "ERROR creating attribute SolverNode::volMultiplier.");
+
+  MFnTypedAttribute inMeshAttr;
+  SolverNode::softBodyMesh = inMeshAttr.create(
+      "mesh",
+      "mesh",
       MFnData::kMesh,
       MObject::kNullObj,
       &status);
-  McheckErr(status, "ERROR creating attribute SolverNode::meshArray.");
+  McheckErr(status, "ERROR creating attribute SolverNode::inMesh.");
 
-  meshArrayAttr.setWritable(true);
-  meshArrayAttr.setArray(true);
-  meshArrayAttr.setUsesArrayDataBuilder(true); // ??
-  meshArrayAttr.setIndexMatters(false);
-  status = addAttribute(SolverNode::meshArray);
-  McheckErr(status, "ERROR adding attribute SolverNode::meshArray.");
+  MFnCompoundAttribute compoundAttr;
+  SolverNode::softBodyArray = compoundAttr.create(
+      "softBodyArray",
+      "sbArray",
+      &status);
+  McheckErr(status, "ERROR creating attribute SolverNode::outCompound.");
+  status = compoundAttr.addChild(SolverNode::strainStiffness);
+  McheckErr(status, "ERROR adding compound children.");
+  status = compoundAttr.addChild(SolverNode::minStrain);
+  McheckErr(status, "ERROR adding compound children.");
+  status = compoundAttr.addChild(SolverNode::maxStrain);
+  McheckErr(status, "ERROR adding compound children.");
+  status = compoundAttr.addChild(SolverNode::volStiffness);
+  McheckErr(status, "ERROR adding compound children.");
+  status = compoundAttr.addChild(SolverNode::volMultiplier);
+  McheckErr(status, "ERROR adding compound children.");
+  status = compoundAttr.addChild(SolverNode::softBodyMesh);
+  McheckErr(status, "ERROR adding compound children.");
+
+  compoundAttr.setWritable(true);
+  compoundAttr.setArray(true);
+  compoundAttr.setIndexMatters(false);
+  // TODO: setDisconnectBehavior??
+  status = addAttribute(SolverNode::softBodyArray);
+  McheckErr(status, "ERROR adding compound SoftBody attribute.");
+
+  // Collision attributes
 
   MFnNumericAttribute collisionItersAttr;
   SolverNode::collisionIterations = collisionItersAttr.create(
@@ -715,7 +798,7 @@ MStatus SolverNode::initialize() {
       status,
       "ERROR attributeAffects(simulationStartTime, outputPositions).");
 
-  status = attributeAffects(meshArray, outputPositions);
+  status = attributeAffects(softBodyArray, outputPositions);
   McheckErr(
       status,
       "ERROR attributeAffects(simulationStartTime, outputPositions).");
@@ -774,7 +857,7 @@ MStatus SolverNode::initialize() {
   status = attributeAffects(simulationStartTime, outputMesh);
   McheckErr(status, "ERROR attributeAffects(simulationStartTime, outputMesh).");
 
-  status = attributeAffects(meshArray, outputMesh);
+  status = attributeAffects(softBodyArray, outputMesh);
   McheckErr(status, "ERROR attributeAffects(simulationStartTime, outputMesh).");
 
   status = attributeAffects(collisionIterations, outputMesh);

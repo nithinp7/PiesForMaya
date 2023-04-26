@@ -37,6 +37,15 @@ public:
 
   static MObject stepSize;
   static MObject iterations;
+
+  // Soft body compound attribute
+  static MObject strainStiffness;
+  static MObject minStrain;
+  static MObject maxStrain;
+  static MObject volStiffness;
+  static MObject volMultiplier;
+  static MObject softBodyMesh;
+  static MObject softBodyArray;
   
   static MObject collisionIterations;
   static MObject collisionDistance;
@@ -51,7 +60,6 @@ public:
   static MObject simulationEnabled;
   static MObject simulationStartTime;
 
-  static MObject meshArray;
   static MObject fixedRegionsArray;
 
   static MObject outputPositions;
