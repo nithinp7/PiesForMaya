@@ -95,58 +95,6 @@ MObject SolverNode::outputPositions;
 MObject SolverNode::outputMesh;
 
 static void setupTestScene(Pies::Solver& solver) {
-  // solver.createTetBox(
-  //     glm::vec3(0.0f, 30.0f, 0.0f),
-  //     1.5f,
-  //     glm::vec3(0.0f),
-  //     1000.0f,
-  //     1.0f,
-  //     true);
-
-  // solver.createTetBox(
-  //     glm::vec3(0.0f, 40.0f, 0.0f),
-  //     2.0f,
-  //     glm::vec3(0.0f),
-  //     1000.0f,
-  //     1.0f,
-  //     false);
-  // solver.createTetBox(
-  //     glm::vec3(10.0f, 40.0f, 0.0f),
-  //     2.0f,
-  //     glm::vec3(0.0f),
-  //     1000.0f,
-  //     1.0f,
-  //     false);
-  // solver.createTetBox(
-  //     glm::vec3(-10.0f, 40.0f, 0.0f),
-  //     2.0f,
-  //     glm::vec3(0.0f),
-  //     1000.0f,
-  //     1.0f,
-  //     false);
-
-  // solver.createTetBox(
-  //     glm::vec3(0.0f, 40.0f, 10.0f),
-  //     2.0f,
-  //     glm::vec3(0.0f),
-  //     1000.0f,
-  //     1.0f,
-  //     false);
-  // solver.createTetBox(
-  //     glm::vec3(10.0f, 40.0f, 10.0f),
-  //     2.0f,
-  //     glm::vec3(0.0f),
-  //     1000.0f,
-  //     1.0f,
-  //     false);
-  // solver.createTetBox(
-  //     glm::vec3(-10.0f, 40.0f, 10.0f),
-  //     2.0f,
-  //     glm::vec3(0.0f),
-  //     1000.0f,
-  //     1.0f,
-  //     false);
-
   solver.createSheet(glm::vec3(0.0f, 20.0f, 0.0f), 2.0f, 1.0f, 800.0f);
 }
 
