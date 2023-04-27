@@ -308,6 +308,7 @@ MStatus SolverNode::compute(const MPlug& plug, MDataBlock& data) {
         }
 
         // this->_pSolver->addNodes(vertices);
+        /*
         this->_pSolver->addTriMeshVolume(
             vertices, 
             indices, 
@@ -316,6 +317,8 @@ MStatus SolverNode::compute(const MPlug& plug, MDataBlock& data) {
             softBodyHandle.child(maxStrain).asFloat(),
             softBodyHandle.child(volStiffness).asFloat(),
             softBodyHandle.child(volMultiplier).asFloat());
+        */
+        this->_pSolver->addClothMesh(vertices, indices, softBodyHandle.child(strainStiffness).asFloat());
 
         pointArr.clear();
         triCountPerPoly.clear();

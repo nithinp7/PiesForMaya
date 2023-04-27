@@ -72,8 +72,27 @@ global proc int addPiesMesh() {
     return true;
 }
 
+global proc int addPiesCloth() {
+    global int $piesMeshCount;
+    global string $piesSolver;
+    
+    string $obj[] = `ls -sl`;
+    string $shapeNames[] = `listRelatives -s $obj[0]`;
+    
+    for ($shapeName in $shapeNames) {
+        string $softBody = `createNode PiesSoftBodyNode -n "PiesSoftBody#"`;
+    
+        connectAttr ($shapeName + ".worldMesh") ($softBody + ".inMesh");
+        connectAttr ($softBody + ".output") ($piesSolver + ".softBodyArray[" + string($piesMeshCount) + "]");
+        $piesMeshCount = $piesMeshCount + 1;
+    }
+    
+    return true;
+}
+
 string $piesMenu = `menu -p $gMainWindow -label "Pies"`;
     menuItem -label "Create Solver" -command "createPiesSolver";
     menuItem -label "Create Soft Body Mesh" -command "addPiesMesh";
+    menuItem -label "Create Cloth" -command "addPiesCloth";
     menuItem -label "Add Constraint" -command "addPiesConstraint";
     menuItem -label "Add Link" -command "addPiesLink";
