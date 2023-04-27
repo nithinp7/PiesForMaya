@@ -3,6 +3,8 @@
 #include <Pies/Solver.h>
 #include <maya/MDataHandle.h>
 #include <maya/MFnArrayAttrsData.h>
+#include <maya/MFnMatrixArrayData.h>
+#include <maya/MFnMatrixAttribute.h>
 #include <maya/MFnMesh.h>
 #include <maya/MFnMeshData.h>
 #include <maya/MFnNumericAttribute.h>
@@ -16,6 +18,7 @@
 #include <maya/MPoint.h>
 #include <maya/MPointArray.h>
 #include <maya/MStatus.h>
+#include <maya/MFnCompoundAttribute.h>
 
 #include <cstdint>
 #include <iostream>
@@ -46,6 +49,21 @@ MObject SolverNode::stepSize;
 
 /*static*/
 MObject SolverNode::iterations;
+
+/*static*/
+MObject SolverNode::strainStiffness;
+/*static*/
+MObject SolverNode::minStrain;
+/*static*/
+MObject SolverNode::maxStrain;
+/*static*/
+MObject SolverNode::volStiffness;
+/*static*/
+MObject SolverNode::volMultiplier;
+/*static*/
+MObject SolverNode::softBodyMesh;
+/*static*/
+MObject SolverNode::softBodyArray;
 
 /*static*/
 MObject SolverNode::collisionIterations;
@@ -81,7 +99,10 @@ MObject SolverNode::simulationEnabled;
 MObject SolverNode::simulationStartTime;
 
 /*static*/
-MObject SolverNode::meshArray;
+MObject SolverNode::fixedRegionsArray;
+
+/*static*/
+MObject SolverNode::linkedRegionsArray;
 
 /*static*/
 MObject SolverNode::outputPositions;
@@ -90,58 +111,6 @@ MObject SolverNode::outputPositions;
 MObject SolverNode::outputMesh;
 
 static void setupTestScene(Pies::Solver& solver) {
-  // solver.createTetBox(
-  //     glm::vec3(0.0f, 30.0f, 0.0f),
-  //     1.5f,
-  //     glm::vec3(0.0f),
-  //     1000.0f,
-  //     1.0f,
-  //     true);
-
-  // solver.createTetBox(
-  //     glm::vec3(0.0f, 40.0f, 0.0f),
-  //     2.0f,
-  //     glm::vec3(0.0f),
-  //     1000.0f,
-  //     1.0f,
-  //     false);
-  // solver.createTetBox(
-  //     glm::vec3(10.0f, 40.0f, 0.0f),
-  //     2.0f,
-  //     glm::vec3(0.0f),
-  //     1000.0f,
-  //     1.0f,
-  //     false);
-  // solver.createTetBox(
-  //     glm::vec3(-10.0f, 40.0f, 0.0f),
-  //     2.0f,
-  //     glm::vec3(0.0f),
-  //     1000.0f,
-  //     1.0f,
-  //     false);
-
-  // solver.createTetBox(
-  //     glm::vec3(0.0f, 40.0f, 10.0f),
-  //     2.0f,
-  //     glm::vec3(0.0f),
-  //     1000.0f,
-  //     1.0f,
-  //     false);
-  // solver.createTetBox(
-  //     glm::vec3(10.0f, 40.0f, 10.0f),
-  //     2.0f,
-  //     glm::vec3(0.0f),
-  //     1000.0f,
-  //     1.0f,
-  //     false);
-  // solver.createTetBox(
-  //     glm::vec3(-10.0f, 40.0f, 10.0f),
-  //     2.0f,
-  //     glm::vec3(0.0f),
-  //     1000.0f,
-  //     1.0f,
-  //     false);
-
   solver.createSheet(glm::vec3(0.0f, 20.0f, 0.0f), 2.0f, 1.0f, 800.0f);
 }
 
@@ -172,7 +141,8 @@ MStatus SolverNode::compute(const MPlug& plug, MDataBlock& data) {
     MDataHandle colDistHandle = data.inputValue(collisionDistance, &status);
     McheckErr(status, "ERROR getting collision distance handle.");
 
-    MDataHandle colThicknessHandle = data.inputValue(collisionThickness, &status);
+    MDataHandle colThicknessHandle =
+        data.inputValue(collisionThickness, &status);
     McheckErr(status, "ERROR getting collision thickness handle.");
 
     MDataHandle gridHandle = data.inputValue(gridSpacing, &status);
@@ -180,7 +150,7 @@ MStatus SolverNode::compute(const MPlug& plug, MDataBlock& data) {
 
     MDataHandle gravityHandle = data.inputValue(gravity, &status);
     McheckErr(status, "ERROR getting gravity handle.");
-    
+
     MDataHandle dampingHandle = data.inputValue(damping, &status);
     McheckErr(status, "ERROR getting damping handle.");
 
@@ -207,8 +177,16 @@ MStatus SolverNode::compute(const MPlug& plug, MDataBlock& data) {
         data.inputValue(simulationStartTime, &status);
     McheckErr(status, "ERROR getting simulationStartTimeHandle handle.");
 
-    MArrayDataHandle meshArrayHandle = data.inputArrayValue(meshArray, &status);
-    McheckErr(status, "ERROR getting meshArray handle.");
+    MArrayDataHandle softBodyArrayHandle = data.inputArrayValue(softBodyArray, &status);
+    McheckErr(status, "ERROR getting softBodyArray handle.");
+
+    MArrayDataHandle fixedRegionsHandle =
+        data.inputArrayValue(fixedRegionsArray, &status);
+    McheckErr(status, "ERROR getting fixedRegionsArray handle.");
+
+    MArrayDataHandle linkedRegionsHandle =
+        data.inputArrayValue(linkedRegionsArray, &status);
+    McheckErr(status, "ERROR getting linkedRegionsArray handle.");
 
     MTime currentTime = timeHandle.asTime();
     const MTime previousTime = prevTimeHandle.asTime();
@@ -240,14 +218,73 @@ MStatus SolverNode::compute(const MPlug& plug, MDataBlock& data) {
       this->_pSolver = std::make_unique<Pies::Solver>(options);
       setupTestScene(*this->_pSolver);
 
+      std::vector<glm::mat4> fixedRegions;
+      fixedRegions.resize(fixedRegionsHandle.elementCount());
+      for (uint32_t regionIndex = 0;
+           regionIndex < fixedRegionsHandle.elementCount();
+           ++regionIndex) {
+        MMatrix regionMatrix =
+            fixedRegionsHandle.inputValue().asMatrix().transpose();
+
+        fixedRegions[regionIndex] = glm::mat4(
+            regionMatrix(0, 0),
+            regionMatrix(1, 0),
+            regionMatrix(2, 0),
+            regionMatrix(3, 0),
+            regionMatrix(0, 1),
+            regionMatrix(1, 1),
+            regionMatrix(2, 1),
+            regionMatrix(3, 1),
+            regionMatrix(0, 2),
+            regionMatrix(1, 2),
+            regionMatrix(2, 2),
+            regionMatrix(3, 2),
+            regionMatrix(0, 3),
+            regionMatrix(1, 3),
+            regionMatrix(2, 3),
+            regionMatrix(3, 3));
+
+        fixedRegionsHandle.next();
+      }
+      
+      std::vector<glm::mat4> linkedRegions;
+      linkedRegions.resize(linkedRegionsHandle.elementCount());
+      for (uint32_t regionIndex = 0;
+           regionIndex < linkedRegionsHandle.elementCount();
+           ++regionIndex) {
+        MMatrix regionMatrix =
+            linkedRegionsHandle.inputValue().asMatrix().transpose();
+
+        linkedRegions[regionIndex] = glm::mat4(
+            regionMatrix(0, 0),
+            regionMatrix(1, 0),
+            regionMatrix(2, 0),
+            regionMatrix(3, 0),
+            regionMatrix(0, 1),
+            regionMatrix(1, 1),
+            regionMatrix(2, 1),
+            regionMatrix(3, 1),
+            regionMatrix(0, 2),
+            regionMatrix(1, 2),
+            regionMatrix(2, 2),
+            regionMatrix(3, 2),
+            regionMatrix(0, 3),
+            regionMatrix(1, 3),
+            regionMatrix(2, 3),
+            regionMatrix(3, 3));
+
+        linkedRegionsHandle.next();
+      }
+
       std::vector<glm::vec3> vertices;
       std::vector<uint32_t> indices;
       MPointArray pointArr;
       MIntArray triCountPerPoly;
       MIntArray triIndices;
-      for (uint32_t meshIndex = 0; meshIndex < meshArrayHandle.elementCount();
-           ++meshIndex) {
-        MDataHandle meshHandle = meshArrayHandle.inputValue();
+      for (uint32_t softBodyIndex = 0; softBodyIndex < softBodyArrayHandle.elementCount();
+           ++softBodyIndex) {
+        MDataHandle softBodyHandle = softBodyArrayHandle.inputValue();
+        MDataHandle meshHandle = softBodyHandle.child(softBodyMesh);
         const MMatrix& transform = meshHandle.geometryTransformMatrix();
         MFnMesh mesh = meshHandle.asMesh();
         mesh.getPoints(pointArr, MSpace::kWorld);
@@ -271,16 +308,25 @@ MStatus SolverNode::compute(const MPlug& plug, MDataBlock& data) {
         }
 
         // this->_pSolver->addNodes(vertices);
-        // this->_pSolver->addTriMeshVolume(vertices, indices, 1000.0f);
-        this->_pSolver->addClothMesh(vertices, indices, 5000.0f);
+        this->_pSolver->addTriMeshVolume(
+            vertices, 
+            indices, 
+            softBodyHandle.child(strainStiffness).asFloat(),
+            softBodyHandle.child(minStrain).asFloat(),
+            softBodyHandle.child(maxStrain).asFloat(),
+            softBodyHandle.child(volStiffness).asFloat(),
+            softBodyHandle.child(volMultiplier).asFloat());
 
         pointArr.clear();
         triCountPerPoly.clear();
         triIndices.clear();
         vertices.clear();
         indices.clear();
-        meshArrayHandle.next();
+        softBodyArrayHandle.next();
       }
+
+      this->_pSolver->addFixedRegions(fixedRegions, 1000.0f);
+      this->_pSolver->addLinkedRegions(linkedRegions, 1000.0f);
     }
 
     if (simulationEnabledValue && this->_simulationTime < timeSeconds) {
@@ -345,7 +391,7 @@ MStatus SolverNode::compute(const MPlug& plug, MDataBlock& data) {
           faceConnects,
           meshData,
           &status);
-		  McheckErr(status, "ERROR reconstructing mesh.");
+      McheckErr(status, "ERROR reconstructing mesh.");
 
       outMeshHandle.set(meshData);
       outputHandle.setMObject(particlesObj);
@@ -424,20 +470,14 @@ MTimeRange SolverNode::transformInvalidationRange(
   // Get the start time and whether simulation is enabled., but it should NOT be
   // animated, so it should be clean.
   MDataBlock data = const_cast<SolverNode*>(this)->forceCache();
-  if (!data.isClean(simulationStartTime) || 
-      !data.isClean(simulationEnabled) ||
-      !data.isClean(meshArray) ||
-      !data.isClean(stepSize) ||
-      !data.isClean(iterations) ||
-      !data.isClean(collisionIterations) ||
-      !data.isClean(collisionDistance) ||
-      !data.isClean(collisionThickness) ||
-      !data.isClean(gridSpacing) ||
-      !data.isClean(gravity) ||
-      !data.isClean(damping) ||
-      !data.isClean(friction) ||
-      !data.isClean(floorHeight) ||
-      !data.isClean(threadCount)) {
+  if (!data.isClean(simulationStartTime) || !data.isClean(simulationEnabled) ||
+      !data.isClean(softBodyArray) || !data.isClean(stepSize) ||
+      !data.isClean(iterations) || !data.isClean(collisionIterations) ||
+      !data.isClean(collisionDistance) || !data.isClean(collisionThickness) ||
+      !data.isClean(gridSpacing) || !data.isClean(gravity) ||
+      !data.isClean(damping) || !data.isClean(friction) ||
+      !data.isClean(floorHeight) || !data.isClean(threadCount) ||
+      !data.isClean(fixedRegionsArray)) {
     this->_resetSimulation = true;
     return MTimeRange{kMinimumTime, kMaximumTime};
   }
@@ -478,6 +518,8 @@ void* SolverNode::creator() { return new SolverNode(); }
 /*static*/
 MStatus SolverNode::initialize() {
   MStatus status = MStatus::kSuccess;
+
+  // Simulation attributes
 
   MFnUnitAttribute timeAttr;
   SolverNode::time =
@@ -551,36 +593,28 @@ MStatus SolverNode::initialize() {
   status = addAttribute(SolverNode::simulationStartTime);
   McheckErr(status, "ERROR adding attribute SolverNode::simulationStartTime.");
 
-  MFnTypedAttribute meshArrayAttr;
-  SolverNode::meshArray = meshArrayAttr.create(
-      "meshArray",
-      "meshes",
-      MFnData::kMesh,
-      MObject::kNullObj,
-      &status);
-  McheckErr(status, "ERROR creating attribute SolverNode::meshArray.");
-
-  meshArrayAttr.setWritable(true);
-  meshArrayAttr.setArray(true);
-  meshArrayAttr.setUsesArrayDataBuilder(true); // ??
-  meshArrayAttr.setIndexMatters(false);
-  status = addAttribute(SolverNode::meshArray);
-  McheckErr(status, "ERROR adding attribute SolverNode::meshArray.");
-
-  
   MFnNumericAttribute collisionItersAttr;
-  SolverNode::collisionIterations =
-      collisionItersAttr.create("collisionIterations", "cIters", MFnNumericData::kInt, 4, &status);
-  McheckErr(status, "ERROR creating attribute SolverNode::collisionIterations.");
+  SolverNode::collisionIterations = collisionItersAttr.create(
+      "collisionIterations",
+      "cIters",
+      MFnNumericData::kInt,
+      4,
+      &status);
+  McheckErr(
+      status,
+      "ERROR creating attribute SolverNode::collisionIterations.");
 
   collisionItersAttr.setWritable(true);
   status = addAttribute(SolverNode::collisionIterations);
   McheckErr(status, "ERROR adding attribute SolverNode::collisionIterations.");
 
   MFnNumericAttribute collisionDistanceAttr;
-  SolverNode::collisionDistance =
-      collisionDistanceAttr
-          .create("collisionDistance", "cDist", MFnNumericData::kFloat, 0.1, &status);
+  SolverNode::collisionDistance = collisionDistanceAttr.create(
+      "collisionDistance",
+      "cDist",
+      MFnNumericData::kFloat,
+      0.1,
+      &status);
   McheckErr(status, "ERROR creating attribute SolverNode::collisionDistance.");
 
   collisionDistanceAttr.setWritable(true);
@@ -588,9 +622,12 @@ MStatus SolverNode::initialize() {
   McheckErr(status, "ERROR adding attribute SolverNode::collisionDistance.");
 
   MFnNumericAttribute collisionThicknessAttr;
-  SolverNode::collisionThickness =
-      collisionThicknessAttr
-          .create("collisionThickness", "cThick", MFnNumericData::kFloat, 0.05, &status);
+  SolverNode::collisionThickness = collisionThicknessAttr.create(
+      "collisionThickness",
+      "cThick",
+      MFnNumericData::kFloat,
+      0.05,
+      &status);
   McheckErr(status, "ERROR creating attribute SolverNode::collisionThickness.");
 
   collisionThicknessAttr.setWritable(true);
@@ -606,11 +643,10 @@ MStatus SolverNode::initialize() {
   gridSpacingAttr.setWritable(true);
   status = addAttribute(SolverNode::gridSpacing);
   McheckErr(status, "ERROR adding attribute SolverNode::gridSpacing.");
-  
+
   MFnNumericAttribute gravityAttr;
   SolverNode::gravity =
-      gravityAttr
-          .create("gravity", "g", MFnNumericData::kFloat, 10.0, &status);
+      gravityAttr.create("gravity", "g", MFnNumericData::kFloat, 10.0, &status);
   McheckErr(status, "ERROR creating attribute SolverNode::gravity.");
 
   gravityAttr.setWritable(true);
@@ -648,13 +684,120 @@ MStatus SolverNode::initialize() {
   McheckErr(status, "ERROR adding attribute SolverNode::floorHeight.");
 
   MFnNumericAttribute threadCountAttr;
-  SolverNode::threadCount = 
-      threadCountAttr.create("threadCount", "threads", MFnNumericData::kInt, 8, &status);
+  SolverNode::threadCount =
+      threadCountAttr
+          .create("threadCount", "threads", MFnNumericData::kInt, 8, &status);
   McheckErr(status, "ERROR creating attribute SolverNode::threadCount.");
 
   threadCountAttr.setWritable(true);
   status = addAttribute(SolverNode::threadCount);
   McheckErr(status, "ERROR adding attribute SolverNode::threadCount.");
+
+  MFnMatrixAttribute fixedRegionsArrayAttr;
+  SolverNode::fixedRegionsArray = fixedRegionsArrayAttr.create(
+      "fixedRegionsArray",
+      "fixedArray",
+      MFnMatrixAttribute::Type::kDouble,
+      &status);
+  McheckErr(status, "ERROR adding attribute SolverNode::fixedRegionsArray.");
+
+  fixedRegionsArrayAttr.setWritable(true);
+  fixedRegionsArrayAttr.setArray(true);
+  fixedRegionsArrayAttr.setUsesArrayDataBuilder(true); // ??
+  fixedRegionsArrayAttr.setIndexMatters(false);
+  status = addAttribute(SolverNode::fixedRegionsArray);
+
+  MFnMatrixAttribute linkedRegionsArrayAttr;
+  SolverNode::linkedRegionsArray = linkedRegionsArrayAttr.create(
+      "linkedRegionsArray",
+      "linkedArray",
+      MFnMatrixAttribute::Type::kDouble,
+      &status);
+  McheckErr(status, "ERROR adding attribute SolverNode::linkedRegionsArray.");
+
+  linkedRegionsArrayAttr.setWritable(true);
+  linkedRegionsArrayAttr.setArray(true);
+  linkedRegionsArrayAttr.setUsesArrayDataBuilder(true); // ??
+  linkedRegionsArrayAttr.setIndexMatters(false);
+  status = addAttribute(SolverNode::linkedRegionsArray);
+
+  // Soft body meshes (compound attribute array)
+  
+  MFnNumericAttribute strainAttr;
+  SolverNode::strainStiffness = strainAttr.create(
+      "strainStiffness",
+      "strainStiff",
+      MFnNumericData::kFloat,
+      1000.0,
+      &status);
+  McheckErr(status, "ERROR creating attribute SolverNode::strainStiffness.");
+
+  MFnNumericAttribute minStrainAttr;
+  SolverNode::minStrain =
+      minStrainAttr
+          .create("minStrain", "minS", MFnNumericData::kFloat, 0.8, &status);
+  McheckErr(status, "ERROR creating attribute SolverNode::minStrain.");
+
+  MFnNumericAttribute maxStrainAttr;
+  SolverNode::maxStrain =
+      maxStrainAttr
+          .create("maxStrain", "maxS", MFnNumericData::kFloat, 1.0, &status);
+  McheckErr(status, "ERROR creating attribute SolverNode::maxStrain.");
+
+  MFnNumericAttribute volStiffnessAttr;
+  SolverNode::volStiffness = volStiffnessAttr.create(
+      "volumeStiffness",
+      "volStiff",
+      MFnNumericData::kFloat,
+      1000.0,
+      &status);
+  McheckErr(status, "ERROR creating attribute SolverNode::volStiffness.");
+
+  MFnNumericAttribute volMultiplierAttr;
+  SolverNode::volMultiplier = volMultiplierAttr.create(
+      "volumeMultiplier",
+      "volMult",
+      MFnNumericData::kFloat,
+      1.0,
+      &status);
+  McheckErr(status, "ERROR creating attribute SolverNode::volMultiplier.");
+
+  MFnTypedAttribute inMeshAttr;
+  SolverNode::softBodyMesh = inMeshAttr.create(
+      "mesh",
+      "mesh",
+      MFnData::kMesh,
+      MObject::kNullObj,
+      &status);
+  McheckErr(status, "ERROR creating attribute SolverNode::inMesh.");
+
+  MFnCompoundAttribute compoundAttr;
+  SolverNode::softBodyArray = compoundAttr.create(
+      "softBodyArray",
+      "sbArray",
+      &status);
+  McheckErr(status, "ERROR creating attribute SolverNode::outCompound.");
+  status = compoundAttr.addChild(SolverNode::strainStiffness);
+  McheckErr(status, "ERROR adding compound children.");
+  status = compoundAttr.addChild(SolverNode::minStrain);
+  McheckErr(status, "ERROR adding compound children.");
+  status = compoundAttr.addChild(SolverNode::maxStrain);
+  McheckErr(status, "ERROR adding compound children.");
+  status = compoundAttr.addChild(SolverNode::volStiffness);
+  McheckErr(status, "ERROR adding compound children.");
+  status = compoundAttr.addChild(SolverNode::volMultiplier);
+  McheckErr(status, "ERROR adding compound children.");
+  status = compoundAttr.addChild(SolverNode::softBodyMesh);
+  McheckErr(status, "ERROR adding compound children.");
+
+  compoundAttr.setWritable(true);
+  compoundAttr.setArray(true);
+  compoundAttr.setIndexMatters(false);
+  // TODO: setDisconnectBehavior??
+  status = addAttribute(SolverNode::softBodyArray);
+  McheckErr(status, "ERROR adding compound SoftBody attribute.");
+
+  // Output attributes
 
   MFnTypedAttribute outputPositionsAttr;
   SolverNode::outputPositions = outputPositionsAttr.create(
@@ -708,49 +851,53 @@ MStatus SolverNode::initialize() {
       status,
       "ERROR attributeAffects(simulationStartTime, outputPositions).");
 
-  status = attributeAffects(meshArray, outputPositions);
+  status = attributeAffects(softBodyArray, outputPositions);
   McheckErr(
       status,
       "ERROR attributeAffects(simulationStartTime, outputPositions).");
 
   status = attributeAffects(collisionIterations, outputPositions);
-  McheckErr(status, "ERROR attributeAffects(collisionIterations, outputPositions).");
+  McheckErr(
+      status,
+      "ERROR attributeAffects(collisionIterations, outputPositions).");
 
   status = attributeAffects(collisionDistance, outputPositions);
-  McheckErr(status, "ERROR attributeAffects(collisionDistance, outputPositions).");
+  McheckErr(
+      status,
+      "ERROR attributeAffects(collisionDistance, outputPositions).");
 
   status = attributeAffects(collisionThickness, outputPositions);
-  McheckErr(status, "ERROR attributeAffects(collisionThickness, outputPositions).");
+  McheckErr(
+      status,
+      "ERROR attributeAffects(collisionThickness, outputPositions).");
 
   status = attributeAffects(gridSpacing, outputPositions);
-  McheckErr(
-      status,
-      "ERROR attributeAffects(gridSpacing, outputPositions).");
+  McheckErr(status, "ERROR attributeAffects(gridSpacing, outputPositions).");
 
   status = attributeAffects(gravity, outputPositions);
-  McheckErr(
-      status,
-      "ERROR attributeAffects(gravity, outputPositions).");
+  McheckErr(status, "ERROR attributeAffects(gravity, outputPositions).");
 
   status = attributeAffects(damping, outputPositions);
-  McheckErr(
-      status,
-      "ERROR attributeAffects(damping, outputPositions).");
+  McheckErr(status, "ERROR attributeAffects(damping, outputPositions).");
 
   status = attributeAffects(friction, outputPositions);
-  McheckErr(
-      status,
-      "ERROR attributeAffects(friction, outputPositions).");
+  McheckErr(status, "ERROR attributeAffects(friction, outputPositions).");
 
   status = attributeAffects(floorHeight, outputPositions);
-  McheckErr(
-      status,
-      "ERROR attributeAffects(floorHeight, outputPositions).");
-      
+  McheckErr(status, "ERROR attributeAffects(floorHeight, outputPositions).");
+
   status = attributeAffects(threadCount, outputPositions);
+  McheckErr(status, "ERROR attributeAffects(threadCount, outputPositions).");
+
+  status = attributeAffects(fixedRegionsArray, outputPositions);
   McheckErr(
       status,
-      "ERROR attributeAffects(threadCount, outputPositions).");
+      "ERROR attributeAffects(fixedRegionsArray, outputPositions).");
+
+  status = attributeAffects(linkedRegionsArray, outputPositions);
+  McheckErr(
+      status,
+      "ERROR attributeAffects(linkedRegionsArray, outputPositions).");
 
   // Setup input-output dependencies
   status = attributeAffects(time, outputMesh);
@@ -768,9 +915,9 @@ MStatus SolverNode::initialize() {
   status = attributeAffects(simulationStartTime, outputMesh);
   McheckErr(status, "ERROR attributeAffects(simulationStartTime, outputMesh).");
 
-  status = attributeAffects(meshArray, outputMesh);
+  status = attributeAffects(softBodyArray, outputMesh);
   McheckErr(status, "ERROR attributeAffects(simulationStartTime, outputMesh).");
-  
+
   status = attributeAffects(collisionIterations, outputMesh);
   McheckErr(status, "ERROR attributeAffects(collisionIterations, outputMesh).");
 
@@ -781,33 +928,30 @@ MStatus SolverNode::initialize() {
   McheckErr(status, "ERROR attributeAffects(collisionThickness, outputMesh).");
 
   status = attributeAffects(gridSpacing, outputMesh);
-  McheckErr(
-      status,
-      "ERROR attributeAffects(gridSpacing, outputMesh).");
+  McheckErr(status, "ERROR attributeAffects(gridSpacing, outputMesh).");
 
   status = attributeAffects(gravity, outputMesh);
-  McheckErr(
-      status,
-      "ERROR attributeAffects(gravity, outputMesh).");
+  McheckErr(status, "ERROR attributeAffects(gravity, outputMesh).");
 
   status = attributeAffects(damping, outputMesh);
-  McheckErr(
-      status,
-      "ERROR attributeAffects(damping, outputMesh).");
+  McheckErr(status, "ERROR attributeAffects(damping, outputMesh).");
 
   status = attributeAffects(friction, outputMesh);
-  McheckErr(
-      status,
-      "ERROR attributeAffects(friction, outputMesh).");
+  McheckErr(status, "ERROR attributeAffects(friction, outputMesh).");
 
   status = attributeAffects(floorHeight, outputMesh);
-  McheckErr(
-      status,
-      "ERROR attributeAffects(floorHeight, outputMesh).");
-      
+  McheckErr(status, "ERROR attributeAffects(floorHeight, outputMesh).");
+
   status = attributeAffects(threadCount, outputMesh);
+  McheckErr(status, "ERROR attributeAffects(threadCount, outputMesh).");
+
+  status = attributeAffects(fixedRegionsArray, outputMesh);
+  McheckErr(status, "ERROR attributeAffects(fixedRegionsArray, outputMesh).");
+
+  status = attributeAffects(linkedRegionsArray, outputMesh);
   McheckErr(
       status,
-      "ERROR attributeAffects(threadCount, outputMesh).");
+      "ERROR attributeAffects(linkedRegionsArray, outputMesh).");
+
   return status;
 }

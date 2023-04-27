@@ -1,0 +1,75 @@
+
+global int $piesMeshCount;
+global int $piesConstraintCount;
+global int $piesLinkCount;
+global string $piesSolver = "";
+
+global proc int addPiesLink() {
+    global int $piesLinkCount;
+    global string $piesSolver;
+    
+    string $locator = `createNode locator`;
+    connectAttr ($locator + ".worldMatrix[0]") ($piesSolver + ".linkedRegionsArray[" + string($piesLinkCount) + "]");
+    $piesLinkCount = $piesLinkCount + 1;
+    
+    return 1;
+}
+
+global proc int addPiesConstraint() {
+    global int $piesConstraintCount;
+    global string $piesSolver;
+    
+    string $locator = `createNode locator`;
+    connectAttr ($locator + ".worldMatrix[0]") ($piesSolver + ".fixedRegionsArray[" + string($piesConstraintCount) + "]");
+    $piesConstraintCount = $piesConstraintCount + 1;
+    
+    return 1;
+}
+
+global proc int createPiesSolver() {
+    global int $piesMeshCount;
+    global int $piesConstraintCount;
+    global string $piesSolver;
+
+    if ($piesSolver != "") {
+      return false;
+    }
+    
+    $piesMeshCount = 0;
+    $piesConstraintCount = 0;
+    
+    polySphere; 
+    instancer; 
+    $piesSolver = `createNode SolverNode -n "PiesSolverNode#"`; 
+    connectAttr pSphere1.matrix instancer1.inputHierarchy[0];  
+    connectAttr ($piesSolver + ".outputPositions") instancer1.inputPoints; 
+    connectAttr time1.outTime ($piesSolver + ".time");
+    
+    string $transform = `createNode transform -n "PiesSolver#"`;
+    string $mesh = `createNode mesh -n "PiesSolverShape#" -p $transform`;
+    sets -add initialShadingGroup $mesh;
+    
+    connectAttr ($piesSolver + ".outputMesh") ($mesh + ".inMesh");  
+    
+    return true;
+}
+
+global proc int addPiesMesh() {
+    global int $piesMeshCount;
+    global string $piesSolver;
+    
+    string $obj[] = `ls -sl`;
+    string $shapeNames[] = `listRelatives -s $obj[0]`;
+    
+    for ($shapeName in $shapeNames) {
+        string $softBody = `createNode PiesSoftBodyNode -n "PiesSoftBody#"`;
+    
+        connectAttr ($shapeName + ".worldMesh") ($softBody + ".inMesh");
+        connectAttr ($softBody + ".output") ($piesSolver + ".softBodyArray[" + string($piesMeshCount) + "]");
+        $piesMeshCount = $piesMeshCount + 1;
+    }
+    
+    return true;
+}
+
+
