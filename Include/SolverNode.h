@@ -61,6 +61,7 @@ public:
   static MObject simulationStartTime;
 
   static MObject fixedRegionsArray;
+  static MObject linkedRegionsArray;
 
   static MObject outputPositions;
   static MObject outputMesh;

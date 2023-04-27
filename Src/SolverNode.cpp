@@ -102,6 +102,9 @@ MObject SolverNode::simulationStartTime;
 MObject SolverNode::fixedRegionsArray;
 
 /*static*/
+MObject SolverNode::linkedRegionsArray;
+
+/*static*/
 MObject SolverNode::outputPositions;
 
 /*static*/
@@ -181,6 +184,10 @@ MStatus SolverNode::compute(const MPlug& plug, MDataBlock& data) {
         data.inputArrayValue(fixedRegionsArray, &status);
     McheckErr(status, "ERROR getting fixedRegionsArray handle.");
 
+    MArrayDataHandle linkedRegionsHandle =
+        data.inputArrayValue(linkedRegionsArray, &status);
+    McheckErr(status, "ERROR getting linkedRegionsArray handle.");
+
     MTime currentTime = timeHandle.asTime();
     const MTime previousTime = prevTimeHandle.asTime();
 
@@ -239,6 +246,35 @@ MStatus SolverNode::compute(const MPlug& plug, MDataBlock& data) {
 
         fixedRegionsHandle.next();
       }
+      
+      std::vector<glm::mat4> linkedRegions;
+      linkedRegions.resize(linkedRegionsHandle.elementCount());
+      for (uint32_t regionIndex = 0;
+           regionIndex < linkedRegionsHandle.elementCount();
+           ++regionIndex) {
+        MMatrix regionMatrix =
+            linkedRegionsHandle.inputValue().asMatrix().transpose();
+
+        linkedRegions[regionIndex] = glm::mat4(
+            regionMatrix(0, 0),
+            regionMatrix(1, 0),
+            regionMatrix(2, 0),
+            regionMatrix(3, 0),
+            regionMatrix(0, 1),
+            regionMatrix(1, 1),
+            regionMatrix(2, 1),
+            regionMatrix(3, 1),
+            regionMatrix(0, 2),
+            regionMatrix(1, 2),
+            regionMatrix(2, 2),
+            regionMatrix(3, 2),
+            regionMatrix(0, 3),
+            regionMatrix(1, 3),
+            regionMatrix(2, 3),
+            regionMatrix(3, 3));
+
+        linkedRegionsHandle.next();
+      }
 
       std::vector<glm::vec3> vertices;
       std::vector<uint32_t> indices;
@@ -290,6 +326,7 @@ MStatus SolverNode::compute(const MPlug& plug, MDataBlock& data) {
       }
 
       this->_pSolver->addFixedRegions(fixedRegions, 1000.0f);
+      this->_pSolver->addLinkedRegions(linkedRegions, 1000.0f);
     }
 
     if (simulationEnabledValue && this->_simulationTime < timeSeconds) {
@@ -482,6 +519,8 @@ void* SolverNode::creator() { return new SolverNode(); }
 MStatus SolverNode::initialize() {
   MStatus status = MStatus::kSuccess;
 
+  // Simulation attributes
+
   MFnUnitAttribute timeAttr;
   SolverNode::time =
       timeAttr.create("time", "t", MFnUnitAttribute::kTime, 0.0, &status);
@@ -553,84 +592,6 @@ MStatus SolverNode::initialize() {
   simulationStartTimeAttr.setWritable(true);
   status = addAttribute(SolverNode::simulationStartTime);
   McheckErr(status, "ERROR adding attribute SolverNode::simulationStartTime.");
-
-  // Soft body meshes (compound attribute array)
-  
-  MFnNumericAttribute strainAttr;
-  SolverNode::strainStiffness = strainAttr.create(
-      "strainStiffness",
-      "strainStiff",
-      MFnNumericData::kFloat,
-      1000.0,
-      &status);
-  McheckErr(status, "ERROR creating attribute SolverNode::strainStiffness.");
-
-  MFnNumericAttribute minStrainAttr;
-  SolverNode::minStrain =
-      minStrainAttr
-          .create("minStrain", "minS", MFnNumericData::kFloat, 0.8, &status);
-  McheckErr(status, "ERROR creating attribute SolverNode::minStrain.");
-
-  MFnNumericAttribute maxStrainAttr;
-  SolverNode::maxStrain =
-      maxStrainAttr
-          .create("maxStrain", "maxS", MFnNumericData::kFloat, 1.0, &status);
-  McheckErr(status, "ERROR creating attribute SolverNode::maxStrain.");
-
-  MFnNumericAttribute volStiffnessAttr;
-  SolverNode::volStiffness = volStiffnessAttr.create(
-      "volumeStiffness",
-      "volStiff",
-      MFnNumericData::kFloat,
-      1000.0,
-      &status);
-  McheckErr(status, "ERROR creating attribute SolverNode::volStiffness.");
-
-  MFnNumericAttribute volMultiplierAttr;
-  SolverNode::volMultiplier = volMultiplierAttr.create(
-      "volumeMultiplier",
-      "volMult",
-      MFnNumericData::kFloat,
-      1.0,
-      &status);
-  McheckErr(status, "ERROR creating attribute SolverNode::volMultiplier.");
-
-  MFnTypedAttribute inMeshAttr;
-  SolverNode::softBodyMesh = inMeshAttr.create(
-      "mesh",
-      "mesh",
-      MFnData::kMesh,
-      MObject::kNullObj,
-      &status);
-  McheckErr(status, "ERROR creating attribute SolverNode::inMesh.");
-
-  MFnCompoundAttribute compoundAttr;
-  SolverNode::softBodyArray = compoundAttr.create(
-      "softBodyArray",
-      "sbArray",
-      &status);
-  McheckErr(status, "ERROR creating attribute SolverNode::outCompound.");
-  status = compoundAttr.addChild(SolverNode::strainStiffness);
-  McheckErr(status, "ERROR adding compound children.");
-  status = compoundAttr.addChild(SolverNode::minStrain);
-  McheckErr(status, "ERROR adding compound children.");
-  status = compoundAttr.addChild(SolverNode::maxStrain);
-  McheckErr(status, "ERROR adding compound children.");
-  status = compoundAttr.addChild(SolverNode::volStiffness);
-  McheckErr(status, "ERROR adding compound children.");
-  status = compoundAttr.addChild(SolverNode::volMultiplier);
-  McheckErr(status, "ERROR adding compound children.");
-  status = compoundAttr.addChild(SolverNode::softBodyMesh);
-  McheckErr(status, "ERROR adding compound children.");
-
-  compoundAttr.setWritable(true);
-  compoundAttr.setArray(true);
-  compoundAttr.setIndexMatters(false);
-  // TODO: setDisconnectBehavior??
-  status = addAttribute(SolverNode::softBodyArray);
-  McheckErr(status, "ERROR adding compound SoftBody attribute.");
-
-  // Collision attributes
 
   MFnNumericAttribute collisionItersAttr;
   SolverNode::collisionIterations = collisionItersAttr.create(
@@ -746,6 +707,98 @@ MStatus SolverNode::initialize() {
   fixedRegionsArrayAttr.setIndexMatters(false);
   status = addAttribute(SolverNode::fixedRegionsArray);
 
+  MFnMatrixAttribute linkedRegionsArrayAttr;
+  SolverNode::linkedRegionsArray = linkedRegionsArrayAttr.create(
+      "linkedRegionsArray",
+      "linkedArray",
+      MFnMatrixAttribute::Type::kDouble,
+      &status);
+  McheckErr(status, "ERROR adding attribute SolverNode::linkedRegionsArray.");
+
+  linkedRegionsArrayAttr.setWritable(true);
+  linkedRegionsArrayAttr.setArray(true);
+  linkedRegionsArrayAttr.setUsesArrayDataBuilder(true); // ??
+  linkedRegionsArrayAttr.setIndexMatters(false);
+  status = addAttribute(SolverNode::linkedRegionsArray);
+
+  // Soft body meshes (compound attribute array)
+  
+  MFnNumericAttribute strainAttr;
+  SolverNode::strainStiffness = strainAttr.create(
+      "strainStiffness",
+      "strainStiff",
+      MFnNumericData::kFloat,
+      1000.0,
+      &status);
+  McheckErr(status, "ERROR creating attribute SolverNode::strainStiffness.");
+
+  MFnNumericAttribute minStrainAttr;
+  SolverNode::minStrain =
+      minStrainAttr
+          .create("minStrain", "minS", MFnNumericData::kFloat, 0.8, &status);
+  McheckErr(status, "ERROR creating attribute SolverNode::minStrain.");
+
+  MFnNumericAttribute maxStrainAttr;
+  SolverNode::maxStrain =
+      maxStrainAttr
+          .create("maxStrain", "maxS", MFnNumericData::kFloat, 1.0, &status);
+  McheckErr(status, "ERROR creating attribute SolverNode::maxStrain.");
+
+  MFnNumericAttribute volStiffnessAttr;
+  SolverNode::volStiffness = volStiffnessAttr.create(
+      "volumeStiffness",
+      "volStiff",
+      MFnNumericData::kFloat,
+      1000.0,
+      &status);
+  McheckErr(status, "ERROR creating attribute SolverNode::volStiffness.");
+
+  MFnNumericAttribute volMultiplierAttr;
+  SolverNode::volMultiplier = volMultiplierAttr.create(
+      "volumeMultiplier",
+      "volMult",
+      MFnNumericData::kFloat,
+      1.0,
+      &status);
+  McheckErr(status, "ERROR creating attribute SolverNode::volMultiplier.");
+
+  MFnTypedAttribute inMeshAttr;
+  SolverNode::softBodyMesh = inMeshAttr.create(
+      "mesh",
+      "mesh",
+      MFnData::kMesh,
+      MObject::kNullObj,
+      &status);
+  McheckErr(status, "ERROR creating attribute SolverNode::inMesh.");
+
+  MFnCompoundAttribute compoundAttr;
+  SolverNode::softBodyArray = compoundAttr.create(
+      "softBodyArray",
+      "sbArray",
+      &status);
+  McheckErr(status, "ERROR creating attribute SolverNode::outCompound.");
+  status = compoundAttr.addChild(SolverNode::strainStiffness);
+  McheckErr(status, "ERROR adding compound children.");
+  status = compoundAttr.addChild(SolverNode::minStrain);
+  McheckErr(status, "ERROR adding compound children.");
+  status = compoundAttr.addChild(SolverNode::maxStrain);
+  McheckErr(status, "ERROR adding compound children.");
+  status = compoundAttr.addChild(SolverNode::volStiffness);
+  McheckErr(status, "ERROR adding compound children.");
+  status = compoundAttr.addChild(SolverNode::volMultiplier);
+  McheckErr(status, "ERROR adding compound children.");
+  status = compoundAttr.addChild(SolverNode::softBodyMesh);
+  McheckErr(status, "ERROR adding compound children.");
+
+  compoundAttr.setWritable(true);
+  compoundAttr.setArray(true);
+  compoundAttr.setIndexMatters(false);
+  // TODO: setDisconnectBehavior??
+  status = addAttribute(SolverNode::softBodyArray);
+  McheckErr(status, "ERROR adding compound SoftBody attribute.");
+
+  // Output attributes
+
   MFnTypedAttribute outputPositionsAttr;
   SolverNode::outputPositions = outputPositionsAttr.create(
       "outputPositions",
@@ -841,6 +894,11 @@ MStatus SolverNode::initialize() {
       status,
       "ERROR attributeAffects(fixedRegionsArray, outputPositions).");
 
+  status = attributeAffects(linkedRegionsArray, outputPositions);
+  McheckErr(
+      status,
+      "ERROR attributeAffects(linkedRegionsArray, outputPositions).");
+
   // Setup input-output dependencies
   status = attributeAffects(time, outputMesh);
   McheckErr(status, "ERROR attributeAffects(time, outputMesh).");
@@ -889,6 +947,11 @@ MStatus SolverNode::initialize() {
 
   status = attributeAffects(fixedRegionsArray, outputMesh);
   McheckErr(status, "ERROR attributeAffects(fixedRegionsArray, outputMesh).");
+
+  status = attributeAffects(linkedRegionsArray, outputMesh);
+  McheckErr(
+      status,
+      "ERROR attributeAffects(linkedRegionsArray, outputMesh).");
 
   return status;
 }
