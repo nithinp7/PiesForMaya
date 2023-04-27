@@ -72,4 +72,8 @@ global proc int addPiesMesh() {
     return true;
 }
 
-
+string $piesMenu = `menu -p $gMainWindow -label "Pies"`;
+    menuItem -label "Create Solver" -command "createPiesSolver";
+    menuItem -label "Create Soft Body Mesh" -command "addPiesMesh";
+    menuItem -label "Add Constraint" -command "addPiesConstraint";
+    menuItem -label "Add Link" -command "addPiesLink";
