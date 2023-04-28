@@ -24,20 +24,24 @@ public:
   static MObject inMesh;
 
   static MObject strainStiffness;
-  static MObject minStrain;
-  static MObject maxStrain;
+  static MObject strainRange;
 
   static MObject volStiffness;
-  static MObject volMultiplier;
+  static MObject volRange;
 
+  static MObject density;
+  static MObject velocity;
+  
   static MObject outMesh;
 
   static MObject outStrainStiffness;
-  static MObject outMinStrain;
-  static MObject outMaxStrain;
+  static MObject outStrainRange;
 
   static MObject outVolStiffness;
-  static MObject outVolMultiplier;
+  static MObject outVolRange;
+
+  static MObject outDensity;
+  static MObject outVelocity;
 
   static MObject outCompound;
 };

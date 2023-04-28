@@ -38,11 +38,11 @@ global proc int createPiesSolver() {
     $piesMeshCount = 0;
     $piesConstraintCount = 0;
     
-    polySphere; 
-    instancer; 
+    // polySphere; 
+    // instancer; 
     $piesSolver = `createNode SolverNode -n "PiesSolverNode#"`; 
-    connectAttr pSphere1.matrix instancer1.inputHierarchy[0];  
-    connectAttr ($piesSolver + ".outputPositions") instancer1.inputPoints; 
+    // connectAttr pSphere1.matrix instancer1.inputHierarchy[0];  
+    // connectAttr ($piesSolver + ".outputPositions") instancer1.inputPoints; 
     connectAttr time1.outTime ($piesSolver + ".time");
     
     string $transform = `createNode transform -n "PiesSolver#"`;
