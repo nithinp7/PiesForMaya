@@ -73,18 +73,18 @@ global proc int addPiesMesh() {
 }
 
 global proc int addPiesCloth() {
-    global int $piesMeshCount;
+    global int $piesClothCount;
     global string $piesSolver;
     
     string $obj[] = `ls -sl`;
     string $shapeNames[] = `listRelatives -s $obj[0]`;
     
     for ($shapeName in $shapeNames) {
-        string $softBody = `createNode PiesClothNode -n "PiesCloth#"`;
+        string $cloth = `createNode PiesClothNode -n "PiesCloth#"`;
     
-        connectAttr ($shapeName + ".worldMesh") ($softBody + ".inMesh");
-        connectAttr ($softBody + ".output") ($piesSolver + ".softBodyArray[" + string($piesMeshCount) + "]");
-        $piesMeshCount = $piesMeshCount + 1;
+        connectAttr ($shapeName + ".worldMesh") ($cloth + ".inMesh");
+        connectAttr ($cloth + ".output") ($piesSolver + ".clothArray[" + string($piesClothCount) + "]");
+        $piesClothCount = $piesClothCount + 1;
     }
     
     return true;
