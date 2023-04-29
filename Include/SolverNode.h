@@ -46,6 +46,12 @@ public:
   static MObject volMultiplier;
   static MObject softBodyMesh;
   static MObject softBodyArray;
+
+  // Cloth compound attribute
+  static MObject stretchStiffness;
+  static MObject bendStiffness;
+  static MObject clothMesh;
+  static MObject clothArray;
   
   static MObject collisionIterations;
   static MObject collisionDistance;

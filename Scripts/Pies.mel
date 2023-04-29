@@ -80,7 +80,7 @@ global proc int addPiesCloth() {
     string $shapeNames[] = `listRelatives -s $obj[0]`;
     
     for ($shapeName in $shapeNames) {
-        string $softBody = `createNode PiesSoftBodyNode -n "PiesSoftBody#"`;
+        string $softBody = `createNode PiesClothNode -n "PiesCloth#"`;
     
         connectAttr ($shapeName + ".worldMesh") ($softBody + ".inMesh");
         connectAttr ($softBody + ".output") ($piesSolver + ".softBodyArray[" + string($piesMeshCount) + "]");
