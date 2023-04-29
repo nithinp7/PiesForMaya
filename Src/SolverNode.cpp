@@ -113,7 +113,7 @@ MObject SolverNode::outputPositions;
 MObject SolverNode::outputMesh;
 
 static void setupTestScene(Pies::Solver& solver) {
-  solver.createSheet(glm::vec3(0.0f, 20.0f, 0.0f), 2.0f, 1.0f, 800.0f);
+  solver.createSheet(glm::vec3(0.0f, 20.0f, 0.0f), 1.0f, 1.0f, 1500.0f);
 }
 
 SolverNode::SolverNode() {}
@@ -200,6 +200,35 @@ MStatus SolverNode::compute(const MPlug& plug, MDataBlock& data) {
     float currentStepSize = stepSizeHandle.asFloat();
     int currentIters = itersHandle.asInt();
 
+    std::vector<glm::mat4> fixedRegions;
+    fixedRegions.resize(fixedRegionsHandle.elementCount());
+    for (uint32_t regionIndex = 0;
+          regionIndex < fixedRegionsHandle.elementCount();
+          ++regionIndex) {
+      MMatrix regionMatrix =
+          fixedRegionsHandle.inputValue().asMatrix().transpose();
+
+      fixedRegions[regionIndex] = glm::mat4(
+          regionMatrix(0, 0),
+          regionMatrix(1, 0),
+          regionMatrix(2, 0),
+          regionMatrix(3, 0),
+          regionMatrix(0, 1),
+          regionMatrix(1, 1),
+          regionMatrix(2, 1),
+          regionMatrix(3, 1),
+          regionMatrix(0, 2),
+          regionMatrix(1, 2),
+          regionMatrix(2, 2),
+          regionMatrix(3, 2),
+          regionMatrix(0, 3),
+          regionMatrix(1, 3),
+          regionMatrix(2, 3),
+          regionMatrix(3, 3));
+
+      fixedRegionsHandle.next();
+    }
+
     // The time check should technically not be necessary
     if (this->_resetSimulation) {
       this->_simulationTime = 0.0f;
@@ -220,35 +249,6 @@ MStatus SolverNode::compute(const MPlug& plug, MDataBlock& data) {
 
       this->_pSolver = std::make_unique<Pies::Solver>(options);
       setupTestScene(*this->_pSolver);
-
-      std::vector<glm::mat4> fixedRegions;
-      fixedRegions.resize(fixedRegionsHandle.elementCount());
-      for (uint32_t regionIndex = 0;
-           regionIndex < fixedRegionsHandle.elementCount();
-           ++regionIndex) {
-        MMatrix regionMatrix =
-            fixedRegionsHandle.inputValue().asMatrix().transpose();
-
-        fixedRegions[regionIndex] = glm::mat4(
-            regionMatrix(0, 0),
-            regionMatrix(1, 0),
-            regionMatrix(2, 0),
-            regionMatrix(3, 0),
-            regionMatrix(0, 1),
-            regionMatrix(1, 1),
-            regionMatrix(2, 1),
-            regionMatrix(3, 1),
-            regionMatrix(0, 2),
-            regionMatrix(1, 2),
-            regionMatrix(2, 2),
-            regionMatrix(3, 2),
-            regionMatrix(0, 3),
-            regionMatrix(1, 3),
-            regionMatrix(2, 3),
-            regionMatrix(3, 3));
-
-        fixedRegionsHandle.next();
-      }
 
       std::vector<glm::mat4> linkedRegions;
       linkedRegions.resize(linkedRegionsHandle.elementCount());
@@ -345,7 +345,9 @@ MStatus SolverNode::compute(const MPlug& plug, MDataBlock& data) {
     }
 
     if (simulationEnabledValue && this->_simulationTime < timeSeconds) {
-      this->_pSolver->tick(0.012f);
+      this->_pSolver->updateFixedRegions(fixedRegions);
+
+      this->_pSolver->tick(stepSizeHandle.asFloat());
       this->_simulationTime = timeSeconds;
 
       MFnArrayAttrsData particlesAAD;
@@ -717,6 +719,7 @@ MStatus SolverNode::initialize() {
   McheckErr(status, "ERROR adding attribute SolverNode::fixedRegionsArray.");
 
   fixedRegionsArrayAttr.setWritable(true);
+  fixedRegionsArrayAttr.setKeyable(true);
   fixedRegionsArrayAttr.setArray(true);
   fixedRegionsArrayAttr.setUsesArrayDataBuilder(true); // ??
   fixedRegionsArrayAttr.setIndexMatters(false);

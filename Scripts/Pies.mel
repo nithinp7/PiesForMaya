@@ -72,4 +72,21 @@ global proc int addPiesMesh() {
     return true;
 }
 
-
+{
+    int $menuEntryExists = `menu -exists "PiesMenu"`;
+    if ($menuEntryExists) 
+    {
+        deleteUI "PiesMenu";  
+    }
+    
+    int $menuDisabled = `menu -exists "PiesMenuDisabled"`;
+    if (!$menuDisabled)
+    {
+        menu -label "Pies" -p $gMainWindow "PiesMenu";
+          menuItem -label "Create Solver" -command "createPiesSolver";
+          menuItem -label "Create Soft Body Mesh" -command "addPiesMesh";
+          // menuItem -label "Create Cloth" -command "addPiesCloth";
+          menuItem -label "Add Constraint" -command "addPiesConstraint";
+          menuItem -label "Add Link" -command "addPiesLink";
+    }
+}
