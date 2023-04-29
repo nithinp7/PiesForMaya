@@ -1,4 +1,5 @@
 #include "SolverNode.h"
+#include "PiesSoftBodyNode.h"
 
 #include <maya/MArgList.h>
 #include <maya/MDGModifier.h>
@@ -32,18 +33,27 @@ MStatus initializePlugin(MObject obj) {
   }
 
   std::string pluginPath(SolverNode::pluginDir.asChar());
-  // TODO: Add scripts from folder
 
-  // std::string scriptPath = pluginPath + "/../../LSystemMenu.mel";
-  // std::string addScriptPathCmd = "source \"" + scriptPath + "\";";
+  std::string scriptPath = pluginPath + "/../../Scripts/Pies.mel";
+  std::string addScriptPathCmd = "source \"" + scriptPath + "\";";
 
-  // MGlobal::executeCommand(MString(addScriptPathCmd.c_str()));
+  MGlobal::executeCommand(MString(addScriptPathCmd.c_str()));
 
   status = plugin.registerNode(
       "SolverNode",
       SolverNode::id,
       SolverNode::creator,
       SolverNode::initialize);
+  if (!status) {
+    status.perror("registerNode");
+    return status;
+  }
+  
+  status = plugin.registerNode(
+      "PiesSoftBodyNode",
+      PiesSoftBodyNode::id,
+      PiesSoftBodyNode::creator,
+      PiesSoftBodyNode::initialize);
   if (!status) {
     status.perror("registerNode");
     return status;
@@ -62,5 +72,11 @@ MStatus uninitializePlugin(MObject obj) {
     return status;
   }
 
+  status = plugin.deregisterNode(PiesSoftBodyNode::id);
+  if (!status) {
+    status.perror("deregisterNode");
+    return status;
+  }
+  
   return status;
 }

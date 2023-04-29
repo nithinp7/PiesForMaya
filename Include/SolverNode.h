@@ -34,14 +34,38 @@ public:
   static MTypeId id;
   static MObject time;
   static MObject prevTime;
+
   static MObject stepSize;
   static MObject iterations;
+
+  // Soft body compound attribute
+  static MObject strainStiffness;
+  static MObject strainRange;
+  static MObject volStiffness;
+  static MObject volRange;
+  static MObject softBodyDensity;
+  static MObject softBodyVelocity;
+  static MObject softBodyMesh;
+  static MObject softBodyArray;
+  
+  static MObject collisionIterations;
+  static MObject collisionDistance;
+  static MObject collisionThickness;
+  static MObject gridSpacing;
+  static MObject gravity;
+  static MObject damping;
+  static MObject friction;
+  static MObject floorHeight;
+  static MObject threadCount;
+  
   static MObject simulationEnabled;
   static MObject simulationStartTime;
 
-  static MObject meshArray;
+  static MObject fixedRegionsArray;
+  static MObject linkedRegionsArray;
 
-  static MObject ouptutPositions;
+  static MObject outputPositions;
+  static MObject outputMesh;
 
 private:
   std::unique_ptr<Pies::Solver> _pSolver;
