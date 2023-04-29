@@ -6,12 +6,13 @@ Pies for Maya is a plugin integration of our soft-body physics engine Pies into 
 
 https://user-images.githubusercontent.com/6706316/235281581-d30632e1-995b-4d28-8f3a-2afa8a9d449f.mp4
 
-### Keyframed Constraints
+##### A simple scene with a number of objects falling past a position-constrained object.
+<img src="https://github.com/nithinp7/PiesForMaya/blob/main/Media/BasicScene.gif">
 
-In the below video, a simple keyframed motion of a Pies Constraint drags along a soft-body.
+##### In the below video, a simple keyframed motion of a Pies Constraint drags along a soft-body.
 <img src="https://github.com/nithinp7/PiesForMaya/blob/main/Media/KeyframedConstraints.gif">
 
-In the below video, a keyframed Pies Constraint pulls the torus upwards, crashing into other falling objects.
+##### In the below video, a keyframed Pies Constraint pulls the torus upwards, crashing into other falling objects.
 <img src="https://github.com/nithinp7/PiesForMaya/blob/main/Media/KeyframedConstraints2.gif">
 
 ## Instructions
