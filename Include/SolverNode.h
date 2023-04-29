@@ -36,6 +36,7 @@ public:
   static MObject prevTime;
 
   static MObject stepSize;
+  static MObject substeps;
   static MObject iterations;
 
   // Soft body compound attribute

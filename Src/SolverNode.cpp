@@ -48,6 +48,9 @@ MObject SolverNode::prevTime;
 MObject SolverNode::stepSize;
 
 /*static*/
+MObject SolverNode::substeps;
+
+/*static*/
 MObject SolverNode::iterations;
 
 /*static*/
@@ -134,6 +137,9 @@ MStatus SolverNode::compute(const MPlug& plug, MDataBlock& data) {
     MDataHandle stepSizeHandle = data.inputValue(stepSize, &status);
     McheckErr(status, "ERROR getting step size handle.");
 
+    MDataHandle substepsHandle = data.inputValue(substeps, &status);
+    McheckErr(status, "ERROR getting substeps handle.");
+
     MDataHandle itersHandle = data.inputValue(iterations, &status);
     McheckErr(status, "ERROR getting iterations handle.");
 
@@ -203,8 +209,8 @@ MStatus SolverNode::compute(const MPlug& plug, MDataBlock& data) {
     std::vector<glm::mat4> fixedRegions;
     fixedRegions.resize(fixedRegionsHandle.elementCount());
     for (uint32_t regionIndex = 0;
-          regionIndex < fixedRegionsHandle.elementCount();
-          ++regionIndex) {
+         regionIndex < fixedRegionsHandle.elementCount();
+         ++regionIndex) {
       MMatrix regionMatrix =
           fixedRegionsHandle.inputValue().asMatrix().transpose();
 
@@ -236,6 +242,7 @@ MStatus SolverNode::compute(const MPlug& plug, MDataBlock& data) {
 
       Pies::SolverOptions options{};
       options.fixedTimestepSize = stepSizeHandle.asFloat();
+      options.timeSubsteps = substepsHandle.asInt();
       options.iterations = itersHandle.asInt();
       options.collisionStabilizationIterations = colItersHandle.asInt();
       options.collisionThresholdDistance = colDistHandle.asFloat();
@@ -320,10 +327,7 @@ MStatus SolverNode::compute(const MPlug& plug, MDataBlock& data) {
         this->_pSolver->addTriMeshVolume(
             vertices,
             indices,
-            glm::vec3(
-                velocity[0],
-                velocity[1],
-                velocity[2]),
+            glm::vec3(velocity[0], velocity[1], velocity[2]),
             softBodyHandle.child(softBodyDensity).asFloat(),
             softBodyHandle.child(strainStiffness).asFloat(),
             strainRangeValue[0],
@@ -489,12 +493,13 @@ MTimeRange SolverNode::transformInvalidationRange(
   MDataBlock data = const_cast<SolverNode*>(this)->forceCache();
   if (!data.isClean(simulationStartTime) || !data.isClean(simulationEnabled) ||
       !data.isClean(softBodyArray) || !data.isClean(stepSize) ||
-      !data.isClean(iterations) || !data.isClean(collisionIterations) ||
-      !data.isClean(collisionDistance) || !data.isClean(collisionThickness) ||
-      !data.isClean(gridSpacing) || !data.isClean(gravity) ||
-      !data.isClean(damping) || !data.isClean(friction) ||
-      !data.isClean(floorHeight) || !data.isClean(threadCount) ||
-      !data.isClean(fixedRegionsArray) || !data.isClean(linkedRegionsArray)) {
+      !data.isClean(substeps) || !data.isClean(iterations) ||
+      !data.isClean(collisionIterations) || !data.isClean(collisionDistance) ||
+      !data.isClean(collisionThickness) || !data.isClean(gridSpacing) ||
+      !data.isClean(gravity) || !data.isClean(damping) ||
+      !data.isClean(friction) || !data.isClean(floorHeight) ||
+      !data.isClean(threadCount) || !data.isClean(fixedRegionsArray) ||
+      !data.isClean(linkedRegionsArray)) {
     this->_resetSimulation = true;
     return MTimeRange{kMinimumTime, kMaximumTime};
   }
@@ -572,9 +577,20 @@ MStatus SolverNode::initialize() {
   status = addAttribute(SolverNode::stepSize);
   McheckErr(status, "ERROR adding attribute SolverNode::stepSize.");
 
+  MFnNumericAttribute substepsAttr;
+  SolverNode::substeps =
+      substepsAttr
+          .create("substeps", "substeps", MFnNumericData::kInt, 1, &status);
+  McheckErr(status, "ERROR creating attribute SolverNode::substeps.");
+
+  substepsAttr.setWritable(true);
+  status = addAttribute(SolverNode::substeps);
+  McheckErr(status, "ERROR adding attribute SolverNode::substeps.");
+
   MFnNumericAttribute itersAttr;
   SolverNode::iterations =
-      itersAttr.create("iterations", "iters", MFnNumericData::kInt, 4, &status);
+      itersAttr
+          .create("iterations", "iters", MFnNumericData::kInt, 4, &status);
   McheckErr(status, "ERROR creating attribute SolverNode::iterations.");
 
   itersAttr.setWritable(true);
@@ -855,6 +871,9 @@ MStatus SolverNode::initialize() {
 
   status = attributeAffects(stepSize, outputPositions);
   McheckErr(status, "ERROR attributeAffects(stepSize, outputPositions).");
+
+  status = attributeAffects(substeps, outputPositions);
+  McheckErr(status, "ERROR attributeAffects(substeps, outputPositions).");
 
   status = attributeAffects(iterations, outputPositions);
   McheckErr(status, "ERROR attributeAffects(iterations, outputPositions).");
