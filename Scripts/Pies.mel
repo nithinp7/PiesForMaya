@@ -8,7 +8,7 @@ global proc int addPiesLink() {
     global int $piesLinkCount;
     global string $piesSolver;
     
-    string $locator = `createNode locator`;
+    string $locator = `createNode locator -n "PiesLink#"`;
     connectAttr ($locator + ".worldMatrix[0]") ($piesSolver + ".linkedRegionsArray[" + string($piesLinkCount) + "]");
     $piesLinkCount = $piesLinkCount + 1;
     
@@ -19,7 +19,7 @@ global proc int addPiesConstraint() {
     global int $piesConstraintCount;
     global string $piesSolver;
     
-    string $locator = `createNode locator`;
+    string $locator = `createNode locator -n "PiesConstraint#"`;
     connectAttr ($locator + ".worldMatrix[0]") ($piesSolver + ".fixedRegionsArray[" + string($piesConstraintCount) + "]");
     $piesConstraintCount = $piesConstraintCount + 1;
     
