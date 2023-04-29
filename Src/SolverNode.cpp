@@ -3,6 +3,7 @@
 #include <Pies/Solver.h>
 #include <maya/MDataHandle.h>
 #include <maya/MFnArrayAttrsData.h>
+#include <maya/MFnCompoundAttribute.h>
 #include <maya/MFnMatrixArrayData.h>
 #include <maya/MFnMatrixAttribute.h>
 #include <maya/MFnMesh.h>
@@ -18,7 +19,6 @@
 #include <maya/MPoint.h>
 #include <maya/MPointArray.h>
 #include <maya/MStatus.h>
-#include <maya/MFnCompoundAttribute.h>
 
 #include <cstdint>
 #include <iostream>
@@ -48,18 +48,23 @@ MObject SolverNode::prevTime;
 MObject SolverNode::stepSize;
 
 /*static*/
+MObject SolverNode::substeps;
+
+/*static*/
 MObject SolverNode::iterations;
 
 /*static*/
 MObject SolverNode::strainStiffness;
 /*static*/
-MObject SolverNode::minStrain;
-/*static*/
-MObject SolverNode::maxStrain;
+MObject SolverNode::strainRange;
 /*static*/
 MObject SolverNode::volStiffness;
 /*static*/
-MObject SolverNode::volMultiplier;
+MObject SolverNode::volRange;
+/*static*/
+MObject SolverNode::softBodyDensity;
+/*static*/
+MObject SolverNode::softBodyVelocity;
 /*static*/
 MObject SolverNode::softBodyMesh;
 
@@ -122,7 +127,7 @@ MObject SolverNode::outputPositions;
 MObject SolverNode::outputMesh;
 
 static void setupTestScene(Pies::Solver& solver) {
-  solver.createSheet(glm::vec3(0.0f, 20.0f, 0.0f), 2.0f, 1.0f, 800.0f);
+  solver.createSheet(glm::vec3(0.0f, 20.0f, 0.0f), 1.0f, 1.0f, 1500.0f);
 }
 
 SolverNode::SolverNode() {}
@@ -142,6 +147,9 @@ MStatus SolverNode::compute(const MPlug& plug, MDataBlock& data) {
 
     MDataHandle stepSizeHandle = data.inputValue(stepSize, &status);
     McheckErr(status, "ERROR getting step size handle.");
+
+    MDataHandle substepsHandle = data.inputValue(substeps, &status);
+    McheckErr(status, "ERROR getting substeps handle.");
 
     MDataHandle itersHandle = data.inputValue(iterations, &status);
     McheckErr(status, "ERROR getting iterations handle.");
@@ -188,10 +196,12 @@ MStatus SolverNode::compute(const MPlug& plug, MDataBlock& data) {
         data.inputValue(simulationStartTime, &status);
     McheckErr(status, "ERROR getting simulationStartTimeHandle handle.");
 
-    MArrayDataHandle softBodyArrayHandle = data.inputArrayValue(softBodyArray, &status);
+    MArrayDataHandle softBodyArrayHandle =
+        data.inputArrayValue(softBodyArray, &status);
     McheckErr(status, "ERROR getting softBodyArray handle.");
 
-    MArrayDataHandle clothArrayHandle = data.inputArrayValue(clothArray, &status);
+    MArrayDataHandle clothArrayHandle =
+        data.inputArrayValue(clothArray, &status);
     McheckErr(status, "ERROR getting clothArray handle.");
 
     MArrayDataHandle fixedRegionsHandle =
@@ -211,6 +221,35 @@ MStatus SolverNode::compute(const MPlug& plug, MDataBlock& data) {
     float currentStepSize = stepSizeHandle.asFloat();
     int currentIters = itersHandle.asInt();
 
+    std::vector<glm::mat4> fixedRegions;
+    fixedRegions.resize(fixedRegionsHandle.elementCount());
+    for (uint32_t regionIndex = 0;
+         regionIndex < fixedRegionsHandle.elementCount();
+         ++regionIndex) {
+      MMatrix regionMatrix =
+          fixedRegionsHandle.inputValue().asMatrix().transpose();
+
+      fixedRegions[regionIndex] = glm::mat4(
+          regionMatrix(0, 0),
+          regionMatrix(1, 0),
+          regionMatrix(2, 0),
+          regionMatrix(3, 0),
+          regionMatrix(0, 1),
+          regionMatrix(1, 1),
+          regionMatrix(2, 1),
+          regionMatrix(3, 1),
+          regionMatrix(0, 2),
+          regionMatrix(1, 2),
+          regionMatrix(2, 2),
+          regionMatrix(3, 2),
+          regionMatrix(0, 3),
+          regionMatrix(1, 3),
+          regionMatrix(2, 3),
+          regionMatrix(3, 3));
+
+      fixedRegionsHandle.next();
+    }
+
     // The time check should technically not be necessary
     if (this->_resetSimulation) {
       this->_simulationTime = 0.0f;
@@ -218,6 +257,7 @@ MStatus SolverNode::compute(const MPlug& plug, MDataBlock& data) {
 
       Pies::SolverOptions options{};
       options.fixedTimestepSize = stepSizeHandle.asFloat();
+      options.timeSubsteps = substepsHandle.asInt();
       options.iterations = itersHandle.asInt();
       options.collisionStabilizationIterations = colItersHandle.asInt();
       options.collisionThresholdDistance = colDistHandle.asFloat();
@@ -232,35 +272,6 @@ MStatus SolverNode::compute(const MPlug& plug, MDataBlock& data) {
       this->_pSolver = std::make_unique<Pies::Solver>(options);
       setupTestScene(*this->_pSolver);
 
-      std::vector<glm::mat4> fixedRegions;
-      fixedRegions.resize(fixedRegionsHandle.elementCount());
-      for (uint32_t regionIndex = 0;
-           regionIndex < fixedRegionsHandle.elementCount();
-           ++regionIndex) {
-        MMatrix regionMatrix =
-            fixedRegionsHandle.inputValue().asMatrix().transpose();
-
-        fixedRegions[regionIndex] = glm::mat4(
-            regionMatrix(0, 0),
-            regionMatrix(1, 0),
-            regionMatrix(2, 0),
-            regionMatrix(3, 0),
-            regionMatrix(0, 1),
-            regionMatrix(1, 1),
-            regionMatrix(2, 1),
-            regionMatrix(3, 1),
-            regionMatrix(0, 2),
-            regionMatrix(1, 2),
-            regionMatrix(2, 2),
-            regionMatrix(3, 2),
-            regionMatrix(0, 3),
-            regionMatrix(1, 3),
-            regionMatrix(2, 3),
-            regionMatrix(3, 3));
-
-        fixedRegionsHandle.next();
-      }
-      
       std::vector<glm::mat4> linkedRegions;
       linkedRegions.resize(linkedRegionsHandle.elementCount());
       for (uint32_t regionIndex = 0;
@@ -295,7 +306,8 @@ MStatus SolverNode::compute(const MPlug& plug, MDataBlock& data) {
       MPointArray pointArr;
       MIntArray triCountPerPoly;
       MIntArray triIndices;
-      for (uint32_t softBodyIndex = 0; softBodyIndex < softBodyArrayHandle.elementCount();
+      for (uint32_t softBodyIndex = 0;
+           softBodyIndex < softBodyArrayHandle.elementCount();
            ++softBodyIndex) {
         MDataHandle softBodyHandle = softBodyArrayHandle.inputValue();
         MDataHandle meshHandle = softBodyHandle.child(softBodyMesh);
@@ -321,14 +333,23 @@ MStatus SolverNode::compute(const MPlug& plug, MDataBlock& data) {
           indices[i + 2] = static_cast<uint32_t>(triIndices[i + 2]);
         }
 
+        const float2& strainRangeValue =
+            softBodyHandle.child(strainRange).asFloat2();
+        const float2& volRangeValue = softBodyHandle.child(volRange).asFloat2();
+        const float3& velocity =
+            softBodyHandle.child(softBodyVelocity).asFloat3();
+
         this->_pSolver->addTriMeshVolume(
-            vertices, 
-            indices, 
+            vertices,
+            indices,
+            glm::vec3(velocity[0], velocity[1], velocity[2]),
+            softBodyHandle.child(softBodyDensity).asFloat(),
             softBodyHandle.child(strainStiffness).asFloat(),
-            softBodyHandle.child(minStrain).asFloat(),
-            softBodyHandle.child(maxStrain).asFloat(),
+            strainRangeValue[0],
+            strainRangeValue[1],
             softBodyHandle.child(volStiffness).asFloat(),
-            softBodyHandle.child(volMultiplier).asFloat());
+            volRangeValue[0],
+            volRangeValue[1]);
 
         pointArr.clear();
         triCountPerPoly.clear();
@@ -338,14 +359,13 @@ MStatus SolverNode::compute(const MPlug& plug, MDataBlock& data) {
         softBodyArrayHandle.next();
       }
 
-      //TODO: CLOTH LOOP
-
       std::vector<glm::vec3> cVertices;
       std::vector<uint32_t> cIndices;
       MPointArray cPointArr;
       MIntArray cTriCountPerPoly;
       MIntArray cTriIndices;
-      for (uint32_t clothIndex = 0; clothIndex < clothArrayHandle.elementCount();
+      for (uint32_t clothIndex = 0;
+           clothIndex < clothArrayHandle.elementCount();
            ++clothIndex) {
         MDataHandle clothHandle = clothArrayHandle.inputValue();
         MDataHandle meshHandle = clothHandle.child(clothMesh);
@@ -371,7 +391,11 @@ MStatus SolverNode::compute(const MPlug& plug, MDataBlock& data) {
           cIndices[i + 2] = static_cast<uint32_t>(cTriIndices[i + 2]);
         }
 
-        this->_pSolver->addClothMesh(cVertices, cIndices, clothHandle.child(stretchStiffness).asFloat());
+        this->_pSolver->addClothMesh(
+            cVertices,
+            cIndices,
+            clothHandle.child(stretchStiffness).asFloat(),
+            clothHandle.child(bendStiffness));
 
         cPointArr.clear();
         cTriCountPerPoly.clear();
@@ -386,7 +410,9 @@ MStatus SolverNode::compute(const MPlug& plug, MDataBlock& data) {
     }
 
     if (simulationEnabledValue && this->_simulationTime < timeSeconds) {
-      this->_pSolver->tick(0.012f);
+      this->_pSolver->updateFixedRegions(fixedRegions);
+
+      this->_pSolver->tick(stepSizeHandle.asFloat());
       this->_simulationTime = timeSeconds;
 
       MFnArrayAttrsData particlesAAD;
@@ -528,12 +554,13 @@ MTimeRange SolverNode::transformInvalidationRange(
   MDataBlock data = const_cast<SolverNode*>(this)->forceCache();
   if (!data.isClean(simulationStartTime) || !data.isClean(simulationEnabled) ||
       !data.isClean(softBodyArray) || !data.isClean(stepSize) ||
-      !data.isClean(iterations) || !data.isClean(collisionIterations) ||
-      !data.isClean(collisionDistance) || !data.isClean(collisionThickness) ||
-      !data.isClean(gridSpacing) || !data.isClean(gravity) ||
-      !data.isClean(damping) || !data.isClean(friction) ||
-      !data.isClean(floorHeight) || !data.isClean(threadCount) ||
-      !data.isClean(fixedRegionsArray)) {
+      !data.isClean(substeps) || !data.isClean(iterations) ||
+      !data.isClean(collisionIterations) || !data.isClean(collisionDistance) ||
+      !data.isClean(collisionThickness) || !data.isClean(gridSpacing) ||
+      !data.isClean(gravity) || !data.isClean(damping) ||
+      !data.isClean(friction) || !data.isClean(floorHeight) ||
+      !data.isClean(threadCount) || !data.isClean(fixedRegionsArray) ||
+      !data.isClean(linkedRegionsArray)) {
     this->_resetSimulation = true;
     return MTimeRange{kMinimumTime, kMaximumTime};
   }
@@ -610,6 +637,16 @@ MStatus SolverNode::initialize() {
   stepSizeAttr.setWritable(true);
   status = addAttribute(SolverNode::stepSize);
   McheckErr(status, "ERROR adding attribute SolverNode::stepSize.");
+
+  MFnNumericAttribute substepsAttr;
+  SolverNode::substeps =
+      substepsAttr
+          .create("substeps", "substeps", MFnNumericData::kInt, 1, &status);
+  McheckErr(status, "ERROR creating attribute SolverNode::substeps.");
+
+  substepsAttr.setWritable(true);
+  status = addAttribute(SolverNode::substeps);
+  McheckErr(status, "ERROR adding attribute SolverNode::substeps.");
 
   MFnNumericAttribute itersAttr;
   SolverNode::iterations =
@@ -758,6 +795,7 @@ MStatus SolverNode::initialize() {
   McheckErr(status, "ERROR adding attribute SolverNode::fixedRegionsArray.");
 
   fixedRegionsArrayAttr.setWritable(true);
+  fixedRegionsArrayAttr.setKeyable(true);
   fixedRegionsArrayAttr.setArray(true);
   fixedRegionsArrayAttr.setUsesArrayDataBuilder(true); // ??
   fixedRegionsArrayAttr.setIndexMatters(false);
@@ -778,7 +816,7 @@ MStatus SolverNode::initialize() {
   status = addAttribute(SolverNode::linkedRegionsArray);
 
   // Soft body meshes (compound attribute array)
-  
+
   MFnNumericAttribute strainAttr;
   SolverNode::strainStiffness = strainAttr.create(
       "strainStiffness",
@@ -788,17 +826,10 @@ MStatus SolverNode::initialize() {
       &status);
   McheckErr(status, "ERROR creating attribute SolverNode::strainStiffness.");
 
-  MFnNumericAttribute minStrainAttr;
-  SolverNode::minStrain =
-      minStrainAttr
-          .create("minStrain", "minS", MFnNumericData::kFloat, 0.8, &status);
-  McheckErr(status, "ERROR creating attribute SolverNode::minStrain.");
-
-  MFnNumericAttribute maxStrainAttr;
-  SolverNode::maxStrain =
-      maxStrainAttr
-          .create("maxStrain", "maxS", MFnNumericData::kFloat, 1.0, &status);
-  McheckErr(status, "ERROR creating attribute SolverNode::maxStrain.");
+  MFnNumericAttribute strainRangeAttr;
+  SolverNode::strainRange =
+      strainRangeAttr.create("strainRange", "strainR", MFnNumericData::k2Float);
+  strainRangeAttr.setDefault(0.8f, 1.0f);
 
   MFnNumericAttribute volStiffnessAttr;
   SolverNode::volStiffness = volStiffnessAttr.create(
@@ -809,39 +840,46 @@ MStatus SolverNode::initialize() {
       &status);
   McheckErr(status, "ERROR creating attribute SolverNode::volStiffness.");
 
-  MFnNumericAttribute volMultiplierAttr;
-  SolverNode::volMultiplier = volMultiplierAttr.create(
-      "volumeMultiplier",
-      "volMult",
+  MFnNumericAttribute volRangeAttr;
+  SolverNode::volRange =
+      volRangeAttr.create("volRange", "volRange", MFnNumericData::k2Float);
+  volRangeAttr.setDefault(1.0f, 1.0f);
+
+  MFnNumericAttribute softBodyDensityAttr;
+  SolverNode::softBodyDensity = softBodyDensityAttr.create(
+      "softBodyDensity",
+      "sbP",
       MFnNumericData::kFloat,
       1.0,
       &status);
-  McheckErr(status, "ERROR creating attribute SolverNode::volMultiplier.");
+  McheckErr(status, "ERROR creating attribute SolverNode::softBodyDensity.");
+
+  MFnNumericAttribute sbVAttr;
+  SolverNode::softBodyVelocity =
+      sbVAttr.create("softBodyVelocity", "sbVel", MFnNumericData::k3Float);
+  sbVAttr.setDefault(0.0f, 0.0f, 0.0f);
 
   MFnTypedAttribute inMeshAttr;
-  SolverNode::softBodyMesh = inMeshAttr.create(
-      "mesh",
-      "mesh",
-      MFnData::kMesh,
-      MObject::kNullObj,
-      &status);
+  SolverNode::softBodyMesh =
+      inMeshAttr
+          .create("mesh", "mesh", MFnData::kMesh, MObject::kNullObj, &status);
   McheckErr(status, "ERROR creating attribute SolverNode::inMesh.");
 
   MFnCompoundAttribute compoundAttr;
-  SolverNode::softBodyArray = compoundAttr.create(
-      "softBodyArray",
-      "sbArray",
-      &status);
+  SolverNode::softBodyArray =
+      compoundAttr.create("softBodyArray", "sbArray", &status);
   McheckErr(status, "ERROR creating attribute SolverNode::outCompound.");
   status = compoundAttr.addChild(SolverNode::strainStiffness);
   McheckErr(status, "ERROR adding compound children.");
-  status = compoundAttr.addChild(SolverNode::minStrain);
-  McheckErr(status, "ERROR adding compound children.");
-  status = compoundAttr.addChild(SolverNode::maxStrain);
+  status = compoundAttr.addChild(SolverNode::strainRange);
   McheckErr(status, "ERROR adding compound children.");
   status = compoundAttr.addChild(SolverNode::volStiffness);
   McheckErr(status, "ERROR adding compound children.");
-  status = compoundAttr.addChild(SolverNode::volMultiplier);
+  status = compoundAttr.addChild(SolverNode::volRange);
+  McheckErr(status, "ERROR adding compound children.");
+  status = compoundAttr.addChild(SolverNode::softBodyDensity);
+  McheckErr(status, "ERROR adding compound children.");
+  status = compoundAttr.addChild(SolverNode::softBodyVelocity);
   McheckErr(status, "ERROR adding compound children.");
   status = compoundAttr.addChild(SolverNode::softBodyMesh);
   McheckErr(status, "ERROR adding compound children.");
@@ -854,7 +892,7 @@ MStatus SolverNode::initialize() {
   McheckErr(status, "ERROR adding compound SoftBody attribute.");
 
   // Cloth meshes (compound attribute array)
-  
+
   MFnNumericAttribute stretchStiffnessAttr;
   SolverNode::stretchStiffness = stretchStiffnessAttr.create(
       "stretchStiffness",
@@ -872,8 +910,8 @@ MStatus SolverNode::initialize() {
       1000.0,
       &status);
   McheckErr(status, "ERROR creating attribute SolverNode::bendStiffness.");
-    
-  //inMesh reused from soft body compound attr
+
+  // inMesh reused from soft body compound attr
   MFnTypedAttribute cInMeshAttr;
   SolverNode::clothMesh = cInMeshAttr.create(
       "clothMesh",
@@ -883,12 +921,10 @@ MStatus SolverNode::initialize() {
       &status);
   McheckErr(status, "ERROR creating attribute SolverNode::cInMesh.");
 
-  //compoundAttr reused from soft body compound attr
+  // compoundAttr reused from soft body compound attr
   MFnCompoundAttribute cCompoundAttr;
-  SolverNode::clothArray = cCompoundAttr.create(
-      "clothArray",
-      "cArray",
-      &status);
+  SolverNode::clothArray =
+      cCompoundAttr.create("clothArray", "cArray", &status);
   McheckErr(status, "ERROR creating attribute SolverNode::outCompound.");
   status = cCompoundAttr.addChild(SolverNode::stretchStiffness);
   McheckErr(status, "ERROR adding compound children.");
@@ -945,6 +981,9 @@ MStatus SolverNode::initialize() {
   status = attributeAffects(stepSize, outputPositions);
   McheckErr(status, "ERROR attributeAffects(stepSize, outputPositions).");
 
+  status = attributeAffects(substeps, outputPositions);
+  McheckErr(status, "ERROR attributeAffects(substeps, outputPositions).");
+
   status = attributeAffects(iterations, outputPositions);
   McheckErr(status, "ERROR attributeAffects(iterations, outputPositions).");
 
@@ -959,14 +998,10 @@ MStatus SolverNode::initialize() {
       "ERROR attributeAffects(simulationStartTime, outputPositions).");
 
   status = attributeAffects(softBodyArray, outputPositions);
-  McheckErr(
-      status,
-      "ERROR attributeAffects(softBodyArray, outputPositions).");
+  McheckErr(status, "ERROR attributeAffects(softBodyArray, outputPositions).");
 
   status = attributeAffects(clothArray, outputPositions);
-  McheckErr(
-      status,
-      "ERROR attributeAffects(clothArray, outputPositions).");
+  McheckErr(status, "ERROR attributeAffects(clothArray, outputPositions).");
 
   status = attributeAffects(collisionIterations, outputPositions);
   McheckErr(
@@ -1064,9 +1099,7 @@ MStatus SolverNode::initialize() {
   McheckErr(status, "ERROR attributeAffects(fixedRegionsArray, outputMesh).");
 
   status = attributeAffects(linkedRegionsArray, outputMesh);
-  McheckErr(
-      status,
-      "ERROR attributeAffects(linkedRegionsArray, outputMesh).");
+  McheckErr(status, "ERROR attributeAffects(linkedRegionsArray, outputMesh).");
 
   return status;
 }

@@ -1,13 +1,13 @@
 #include "PiesSoftBodyNode.h"
 
 #include <maya/MFloatArray.h>
+#include <maya/MFnCompoundAttribute.h>
 #include <maya/MFnMesh.h>
 #include <maya/MFnMeshData.h>
 #include <maya/MFnNumericAttribute.h>
 #include <maya/MGlobal.h>
 #include <maya/MIOStream.h>
 #include <maya/MStringArray.h>
-#include <maya/MFnCompoundAttribute.h>
 
 #define McheckErr(stat, msg)                                                   \
   if (!stat) {                                                                 \
@@ -26,16 +26,19 @@ MObject PiesSoftBodyNode::inMesh;
 MObject PiesSoftBodyNode::strainStiffness;
 
 /*static*/
-MObject PiesSoftBodyNode::minStrain;
-
-/*static*/
-MObject PiesSoftBodyNode::maxStrain;
+MObject PiesSoftBodyNode::strainRange;
 
 /*static*/
 MObject PiesSoftBodyNode::volStiffness;
 
 /*static*/
-MObject PiesSoftBodyNode::volMultiplier;
+MObject PiesSoftBodyNode::volRange;
+
+/*static*/
+MObject PiesSoftBodyNode::density;
+
+/*static*/
+MObject PiesSoftBodyNode::velocity;
 
 /*static*/
 MObject PiesSoftBodyNode::outMesh;
@@ -44,24 +47,25 @@ MObject PiesSoftBodyNode::outMesh;
 MObject PiesSoftBodyNode::outStrainStiffness;
 
 /*static*/
-MObject PiesSoftBodyNode::outMinStrain;
-
-/*static*/
-MObject PiesSoftBodyNode::outMaxStrain;
+MObject PiesSoftBodyNode::outStrainRange;
 
 /*static*/
 MObject PiesSoftBodyNode::outVolStiffness;
 
 /*static*/
-MObject PiesSoftBodyNode::outVolMultiplier;
+MObject PiesSoftBodyNode::outVolRange;
+
+/*static*/
+MObject PiesSoftBodyNode::outDensity;
+
+/*static*/
+MObject PiesSoftBodyNode::outVelocity;
 
 /*static*/
 MObject PiesSoftBodyNode::outCompound;
 
 /*static*/
-void* PiesSoftBodyNode::creator() {
-  return new PiesSoftBodyNode();
-}
+void* PiesSoftBodyNode::creator() { return new PiesSoftBodyNode(); }
 
 MStatus PiesSoftBodyNode::compute(const MPlug& plug, MDataBlock& data) {
   MStatus status = MStatus::kSuccess;
@@ -69,28 +73,36 @@ MStatus PiesSoftBodyNode::compute(const MPlug& plug, MDataBlock& data) {
   if (plug == outCompound) {
     float strainStiffnessValue =
         data.inputValue(strainStiffness, &status).asFloat();
-    float minStrainValue = data.inputValue(minStrain, &status).asFloat();
-    float maxStrainValue = data.inputValue(maxStrain, &status).asFloat();
+    const float2& strainRangeValue =
+        data.inputValue(strainRange, &status).asFloat2();
 
     float volStiffValue = data.inputValue(volStiffness, &status).asFloat();
-    float volMultValue = data.inputValue(volMultiplier, &status).asFloat();
+    const float2& volRangeValue = data.inputValue(volRange, &status).asFloat2();
+
+    float densityValue = data.inputValue(density, &status).asFloat();
+
+    const float3& velocityValue = data.inputValue(velocity, &status).asFloat3();
 
     MDataHandle inMeshHandle = data.inputValue(inMesh, &status);
     McheckErr(status, "ERROR getting inMesh handle.");
 
     MDataHandle compoundHandle = data.outputValue(outCompound, &status);
     McheckErr(status, "ERROR getting outCompound handle.");
-    
+
     MDataHandle outMeshHandle = compoundHandle.child(outMesh);
 
     outMeshHandle.copy(inMeshHandle);
     MFnMesh meshOut(outMeshHandle.asMesh());
 
     compoundHandle.child(outStrainStiffness).setFloat(strainStiffnessValue);
-    compoundHandle.child(outMinStrain).setFloat(minStrainValue);
-    compoundHandle.child(outMaxStrain).setFloat(maxStrainValue);
+    compoundHandle.child(outStrainRange)
+        .set2Float(strainRangeValue[0], strainRangeValue[1]);
     compoundHandle.child(outVolStiffness).setFloat(volStiffValue);
-    compoundHandle.child(outVolMultiplier).setFloat(volMultValue);
+    compoundHandle.child(outVolRange)
+        .set2Float(volRangeValue[0], volRangeValue[1]);
+    compoundHandle.child(outDensity).setFloat(densityValue);
+    compoundHandle.child(outVelocity)
+        .set3Float(velocityValue[0], velocityValue[1], velocityValue[2]);
 
     data.setClean(outCompound);
   } else {
@@ -113,34 +125,26 @@ MStatus PiesSoftBodyNode::initialize() {
       MFnNumericData::kFloat,
       1000.0,
       &status);
-  McheckErr(status, "ERROR creating attribute PiesSoftBodyNode::strainStiffness.");
+  McheckErr(
+      status,
+      "ERROR creating attribute PiesSoftBodyNode::strainStiffness.");
 
   strainAttr.setWritable(true);
   strainAttr.setKeyable(false);
   status = addAttribute(PiesSoftBodyNode::strainStiffness);
-  McheckErr(status, "ERROR adding attribute PiesSoftBodyNode::strainStiffness.");
+  McheckErr(
+      status,
+      "ERROR adding attribute PiesSoftBodyNode::strainStiffness.");
 
-  MFnNumericAttribute minStrainAttr;
-  PiesSoftBodyNode::minStrain =
-      minStrainAttr
-          .create("minStrain", "minS", MFnNumericData::kFloat, 0.8, &status);
-  McheckErr(status, "ERROR creating attribute PiesSoftBodyNode::minStrain.");
+  MFnNumericAttribute strainRangeAttr;
+  PiesSoftBodyNode::strainRange =
+      strainRangeAttr.create("strainRange", "strainR", MFnNumericData::k2Float);
 
-  minStrainAttr.setWritable(true);
-  minStrainAttr.setKeyable(false);
-  status = addAttribute(PiesSoftBodyNode::minStrain);
-  McheckErr(status, "ERROR adding attribute PiesSoftBodyNode::minStrain.");
-
-  MFnNumericAttribute maxStrainAttr;
-  PiesSoftBodyNode::maxStrain =
-      maxStrainAttr
-          .create("maxStrain", "maxS", MFnNumericData::kFloat, 1.0, &status);
-  McheckErr(status, "ERROR creating attribute PiesSoftBodyNode::maxStrain.");
-
-  maxStrainAttr.setWritable(true);
-  maxStrainAttr.setKeyable(false);
-  status = addAttribute(PiesSoftBodyNode::maxStrain);
-  McheckErr(status, "ERROR adding attribute PiesSoftBodyNode::maxStrain.");
+  strainRangeAttr.setDefault(0.8f, 1.0f);
+  strainRangeAttr.setWritable(true);
+  strainRangeAttr.setKeyable(false);
+  status = addAttribute(PiesSoftBodyNode::strainRange);
+  McheckErr(status, "ERROR adding attribute PiesSoftBodyNode::strainRange.");
 
   MFnNumericAttribute volStiffnessAttr;
   PiesSoftBodyNode::volStiffness = volStiffnessAttr.create(
@@ -156,19 +160,33 @@ MStatus PiesSoftBodyNode::initialize() {
   status = addAttribute(PiesSoftBodyNode::volStiffness);
   McheckErr(status, "ERROR adding attribute PiesSoftBodyNode::volStiffness.");
 
-  MFnNumericAttribute volMultiplierAttr;
-  PiesSoftBodyNode::volMultiplier = volMultiplierAttr.create(
-      "volumeMultiplier",
-      "volMult",
-      MFnNumericData::kFloat,
-      1.0,
-      &status);
-  McheckErr(status, "ERROR creating attribute PiesSoftBodyNode::volMultiplier.");
+  MFnNumericAttribute volRangeAttr;
+  PiesSoftBodyNode::volRange =
+      volRangeAttr.create("volRange", "volRange", MFnNumericData::k2Float);
+  volRangeAttr.setDefault(1.0f, 1.0f);
+  volRangeAttr.setWritable(true);
+  volRangeAttr.setKeyable(false);
+  status = addAttribute(PiesSoftBodyNode::volRange);
+  McheckErr(status, "ERROR adding attribute PiesSoftBodyNode::volRange.");
 
-  volMultiplierAttr.setWritable(true);
-  volMultiplierAttr.setKeyable(false);
-  status = addAttribute(PiesSoftBodyNode::volMultiplier);
-  McheckErr(status, "ERROR adding attribute PiesSoftBodyNode::volMultiplier.");
+  MFnNumericAttribute densityAttr;
+  PiesSoftBodyNode::density =
+      densityAttr.create("density", "p", MFnNumericData::kFloat, 1.0, &status);
+  McheckErr(status, "ERROR creating attribute PiesSoftBodyNode::density.");
+
+  densityAttr.setWritable(true);
+  densityAttr.setKeyable(false);
+  status = addAttribute(PiesSoftBodyNode::density);
+  McheckErr(status, "ERROR adding attribute PiesSoftBodyNode::density.");
+
+  MFnNumericAttribute velocityAttr;
+  PiesSoftBodyNode::velocity =
+      velocityAttr.create("velocity", "vel", MFnNumericData::k3Float);
+  velocityAttr.setDefault(0.0f, 0.0f, 0.0f);
+  velocityAttr.setWritable(true);
+  velocityAttr.setKeyable(false);
+  status = addAttribute(PiesSoftBodyNode::velocity);
+  McheckErr(status, "ERROR adding attribute PiesSoftBodyNode::velocity.");
 
   MFnTypedAttribute inMeshAttr;
   PiesSoftBodyNode::inMesh = inMeshAttr.create(
@@ -195,23 +213,19 @@ MStatus PiesSoftBodyNode::initialize() {
       &status);
   outStrainAttr.setWritable(false);
   outStrainAttr.setStorable(true);
-  McheckErr(status, "ERROR creating attribute PiesSoftBodyNode::outStrainStiffness.");
+  McheckErr(
+      status,
+      "ERROR creating attribute PiesSoftBodyNode::outStrainStiffness.");
 
-  MFnNumericAttribute outMinStrainAttr;
-  PiesSoftBodyNode::outMinStrain =
-      outMinStrainAttr
-          .create("outMinStrain", "oMinS", MFnNumericData::kFloat, 0.8, &status);
-  outMinStrainAttr.setWritable(false);
-  outMinStrainAttr.setStorable(true);
+  MFnNumericAttribute outStrainRangeAttr;
+  PiesSoftBodyNode::outStrainRange = outStrainRangeAttr.create(
+      "outStrainRange",
+      "oStrainR",
+      MFnNumericData::k2Float);
+  outStrainRangeAttr.setDefault(0.8f, 1.0f);
+  outStrainRangeAttr.setWritable(false);
+  outStrainRangeAttr.setStorable(true);
   McheckErr(status, "ERROR creating attribute PiesSoftBodyNode::outMinStrain.");
-
-  MFnNumericAttribute outMaxStrainAttr;
-  PiesSoftBodyNode::outMaxStrain =
-      outMaxStrainAttr
-          .create("outMaxStrain", "oMaxS", MFnNumericData::kFloat, 1.0, &status);
-  outMaxStrainAttr.setWritable(false);
-  outMaxStrainAttr.setStorable(true);
-  McheckErr(status, "ERROR creating attribute PiesSoftBodyNode::outMaxStrain.");
 
   MFnNumericAttribute outVolStiffnessAttr;
   PiesSoftBodyNode::outVolStiffness = outVolStiffnessAttr.create(
@@ -222,18 +236,35 @@ MStatus PiesSoftBodyNode::initialize() {
       &status);
   outVolStiffnessAttr.setWritable(false);
   outVolStiffnessAttr.setStorable(true);
-  McheckErr(status, "ERROR creating attribute PiesSoftBodyNode::outVolStiffness.");
+  McheckErr(
+      status,
+      "ERROR creating attribute PiesSoftBodyNode::outVolStiffness.");
 
-  MFnNumericAttribute outVolMultiplierAttr;
-  PiesSoftBodyNode::outVolMultiplier = outVolMultiplierAttr.create(
-      "outVolumeMultiplier",
-      "vm",
-      MFnNumericData::kFloat,
-      1.0,
-      &status);
-  outVolMultiplierAttr.setWritable(false);
-  outVolMultiplierAttr.setStorable(true);
-  McheckErr(status, "ERROR creating attribute PiesSoftBodyNode::outVolMultiplier.");
+  MFnNumericAttribute outVolRangeAttr;
+  PiesSoftBodyNode::outVolRange = outVolRangeAttr.create(
+      "outVolRange",
+      "oVolRange",
+      MFnNumericData::k2Float);
+  outVolRangeAttr.setDefault(1.0f, 1.0f);
+  outVolRangeAttr.setWritable(false);
+  outVolRangeAttr.setStorable(true);
+  McheckErr(status, "ERROR creating attribute PiesSoftBodyNode::outVolRange.");
+
+  MFnNumericAttribute outDensityAttr;
+  PiesSoftBodyNode::outDensity =
+      outDensityAttr
+          .create("outDensity", "outP", MFnNumericData::kFloat, 1.0, &status);
+  outDensityAttr.setWritable(false);
+  outDensityAttr.setStorable(true);
+  McheckErr(status, "ERROR creating attribute PiesSoftBodyNode::outDensity.");
+
+  MFnNumericAttribute outVelocityAttr;
+  PiesSoftBodyNode::outVelocity =
+      outVelocityAttr.create("outVelocity", "outVel", MFnNumericData::k3Float);
+  outVelocityAttr.setDefault(0.0f, 0.0f, 0.0f);
+  outVelocityAttr.setWritable(false);
+  outVelocityAttr.setStorable(true);
+  McheckErr(status, "ERROR creating attribute PiesSoftBodyNode::outVelocity.");
 
   MFnTypedAttribute outMeshAttr;
   PiesSoftBodyNode::outMesh = outMeshAttr.create(
@@ -248,20 +279,19 @@ MStatus PiesSoftBodyNode::initialize() {
   McheckErr(status, "ERROR creating attribute PiesSoftBodyNode::outMesh.");
 
   MFnCompoundAttribute compoundAttr;
-  PiesSoftBodyNode::outCompound = compoundAttr.create(
-      "output",
-      "out",
-      &status);
+  PiesSoftBodyNode::outCompound = compoundAttr.create("output", "out", &status);
   McheckErr(status, "ERROR creating attribute PiesSoftBodyNode::outCompound.");
   status = compoundAttr.addChild(PiesSoftBodyNode::outStrainStiffness);
   McheckErr(status, "ERROR adding compound children.");
-  status = compoundAttr.addChild(PiesSoftBodyNode::outMinStrain);
-  McheckErr(status, "ERROR adding compound children.");
-  status = compoundAttr.addChild(PiesSoftBodyNode::outMaxStrain);
+  status = compoundAttr.addChild(PiesSoftBodyNode::outStrainRange);
   McheckErr(status, "ERROR adding compound children.");
   status = compoundAttr.addChild(PiesSoftBodyNode::outVolStiffness);
   McheckErr(status, "ERROR adding compound children.");
-  status = compoundAttr.addChild(PiesSoftBodyNode::outVolMultiplier);
+  status = compoundAttr.addChild(PiesSoftBodyNode::outVolRange);
+  McheckErr(status, "ERROR adding compound children.");
+  status = compoundAttr.addChild(PiesSoftBodyNode::outDensity);
+  McheckErr(status, "ERROR adding compound children.");
+  status = compoundAttr.addChild(PiesSoftBodyNode::outVelocity);
   McheckErr(status, "ERROR adding compound children.");
   status = compoundAttr.addChild(PiesSoftBodyNode::outMesh);
   McheckErr(status, "ERROR adding compound children.");
@@ -271,7 +301,7 @@ MStatus PiesSoftBodyNode::initialize() {
   compoundAttr.setCached(true);
   status = addAttribute(PiesSoftBodyNode::outCompound);
   McheckErr(status, "ERROR adding compound attribute.");
-  
+
   // Setup input-output dependencies
   status = attributeAffects(inMesh, outCompound);
   McheckErr(status, "ERROR attributeAffects(inMesh, outCompound).");
@@ -279,17 +309,20 @@ MStatus PiesSoftBodyNode::initialize() {
   status = attributeAffects(strainStiffness, outCompound);
   McheckErr(status, "ERROR attributeAffects(strainStiffness, outCompound).");
 
-  status = attributeAffects(minStrain, outCompound);
-  McheckErr(status, "ERROR attributeAffects(minStrain, outCompound).");
-
-  status = attributeAffects(maxStrain, outCompound);
-  McheckErr(status, "ERROR attributeAffects(maxStrain, outCompound).");
+  status = attributeAffects(strainRange, outCompound);
+  McheckErr(status, "ERROR attributeAffects(strainRange, outCompound).");
 
   status = attributeAffects(volStiffness, outCompound);
   McheckErr(status, "ERROR attributeAffects(volStiffness, outCompound).");
 
-  status = attributeAffects(volMultiplier, outCompound);
-  McheckErr(status, "ERROR attributeAffects(volMultiplier, outCompound).");
+  status = attributeAffects(volRange, outCompound);
+  McheckErr(status, "ERROR attributeAffects(volRange, outCompound).");
+
+  status = attributeAffects(density, outCompound);
+  McheckErr(status, "ERROR attributeAffects(density, outCompound).");
+
+  status = attributeAffects(velocity, outCompound);
+  McheckErr(status, "ERROR attributeAffects(velocity, outCompound).");
 
   return status;
 }

@@ -36,14 +36,16 @@ public:
   static MObject prevTime;
 
   static MObject stepSize;
+  static MObject substeps;
   static MObject iterations;
 
   // Soft body compound attribute
   static MObject strainStiffness;
-  static MObject minStrain;
-  static MObject maxStrain;
+  static MObject strainRange;
   static MObject volStiffness;
-  static MObject volMultiplier;
+  static MObject volRange;
+  static MObject softBodyDensity;
+  static MObject softBodyVelocity;
   static MObject softBodyMesh;
   static MObject softBodyArray;
 

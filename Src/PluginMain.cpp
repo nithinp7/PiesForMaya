@@ -34,7 +34,6 @@ MStatus initializePlugin(MObject obj) {
   }
 
   std::string pluginPath(SolverNode::pluginDir.asChar());
-  // TODO: Add scripts from folder
 
   std::string scriptPath = pluginPath + "/../../Scripts/Pies.mel";
   std::string addScriptPathCmd = "source \"" + scriptPath + "\";";

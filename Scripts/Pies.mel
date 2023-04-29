@@ -8,7 +8,7 @@ global proc int addPiesLink() {
     global int $piesLinkCount;
     global string $piesSolver;
     
-    string $locator = `createNode locator`;
+    string $locator = `createNode locator -n "PiesLink#"`;
     connectAttr ($locator + ".worldMatrix[0]") ($piesSolver + ".linkedRegionsArray[" + string($piesLinkCount) + "]");
     $piesLinkCount = $piesLinkCount + 1;
     
@@ -19,7 +19,7 @@ global proc int addPiesConstraint() {
     global int $piesConstraintCount;
     global string $piesSolver;
     
-    string $locator = `createNode locator`;
+    string $locator = `createNode locator -n "PiesConstraint#"`;
     connectAttr ($locator + ".worldMatrix[0]") ($piesSolver + ".fixedRegionsArray[" + string($piesConstraintCount) + "]");
     $piesConstraintCount = $piesConstraintCount + 1;
     
@@ -40,11 +40,11 @@ global proc int createPiesSolver() {
     $piesClothCount = 0;
     $piesConstraintCount = 0;
     
-    polySphere; 
-    instancer; 
+    // polySphere; 
+    // instancer; 
     $piesSolver = `createNode SolverNode -n "PiesSolverNode#"`; 
-    connectAttr pSphere1.matrix instancer1.inputHierarchy[0];  
-    connectAttr ($piesSolver + ".outputPositions") instancer1.inputPoints; 
+    // connectAttr pSphere1.matrix instancer1.inputHierarchy[0];  
+    // connectAttr ($piesSolver + ".outputPositions") instancer1.inputPoints; 
     connectAttr time1.outTime ($piesSolver + ".time");
     
     string $transform = `createNode transform -n "PiesSolver#"`;
@@ -60,15 +60,16 @@ global proc int addPiesMesh() {
     global int $piesMeshCount;
     global string $piesSolver;
     
-    string $obj[] = `ls -sl`;
-    string $shapeNames[] = `listRelatives -s $obj[0]`;
-    
-    for ($shapeName in $shapeNames) {
-        string $softBody = `createNode PiesSoftBodyNode -n "PiesSoftBody#"`;
-    
-        connectAttr ($shapeName + ".worldMesh") ($softBody + ".inMesh");
-        connectAttr ($softBody + ".output") ($piesSolver + ".softBodyArray[" + string($piesMeshCount) + "]");
-        $piesMeshCount = $piesMeshCount + 1;
+    string $objs[] = `ls -sl`;
+    for ($obj in $objs) {
+      string $shapeNames[] = `listRelatives -s $obj`;
+      for ($shapeName in $shapeNames) {
+          string $softBody = `createNode PiesSoftBodyNode -n "PiesSoftBody#"`;
+      
+          connectAttr ($shapeName + ".worldMesh") ($softBody + ".inMesh");
+          connectAttr ($softBody + ".output") ($piesSolver + ".softBodyArray[" + string($piesMeshCount) + "]");
+          $piesMeshCount = $piesMeshCount + 1;
+      }
     }
     
     return true;
@@ -78,23 +79,36 @@ global proc int addPiesCloth() {
     global int $piesClothCount;
     global string $piesSolver;
     
-    string $obj[] = `ls -sl`;
-    string $shapeNames[] = `listRelatives -s $obj[0]`;
-    
-    for ($shapeName in $shapeNames) {
-        string $cloth = `createNode PiesClothNode -n "PiesCloth#"`;
-    
-        connectAttr ($shapeName + ".worldMesh") ($cloth + ".inMesh");
-        connectAttr ($cloth + ".output") ($piesSolver + ".clothArray[" + string($piesClothCount) + "]");
-        $piesClothCount = $piesClothCount + 1;
+    string $objs[] = `ls -sl`;
+    for ($obj in $objs) {
+      string $shapeNames[] = `listRelatives -s $obj`;
+      for ($shapeName in $shapeNames) {
+          string $cloth = `createNode PiesClothNode -n "PiesCloth#"`;
+      
+          connectAttr ($shapeName + ".worldMesh") ($cloth + ".inMesh");
+          connectAttr ($cloth + ".output") ($piesSolver + ".clothArray[" + string($piesClothCount) + "]");
+          $piesClothCount = $piesClothCount + 1;
+      }
     }
     
     return true;
 }
 
-string $piesMenu = `menu -p $gMainWindow -label "Pies"`;
-    menuItem -label "Create Solver" -command "createPiesSolver";
-    menuItem -label "Create Soft Body Mesh" -command "addPiesMesh";
-    menuItem -label "Create Cloth" -command "addPiesCloth";
-    menuItem -label "Add Constraint" -command "addPiesConstraint";
-    menuItem -label "Add Link" -command "addPiesLink";
+{
+    int $menuEntryExists = `menu -exists "PiesMenu"`;
+    if ($menuEntryExists) 
+    {
+        deleteUI "PiesMenu";  
+    }
+    
+    int $menuDisabled = `menu -exists "PiesMenuDisabled"`;
+    if (!$menuDisabled)
+    {
+        menu -label "Pies" -p $gMainWindow "PiesMenu";
+          menuItem -label "Create Solver" -command "createPiesSolver";
+          menuItem -label "Create Soft Body Mesh" -command "addPiesMesh";
+          // menuItem -label "Create Cloth" -command "addPiesCloth";
+          menuItem -label "Add Constraint" -command "addPiesConstraint";
+          menuItem -label "Add Link" -command "addPiesLink";
+    }
+}
