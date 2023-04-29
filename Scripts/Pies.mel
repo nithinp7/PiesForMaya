@@ -28,6 +28,7 @@ global proc int addPiesConstraint() {
 
 global proc int createPiesSolver() {
     global int $piesMeshCount;
+    global int $piesClothCount;
     global int $piesConstraintCount;
     global string $piesSolver;
 
@@ -36,6 +37,7 @@ global proc int createPiesSolver() {
     }
     
     $piesMeshCount = 0;
+    $piesClothCount = 0;
     $piesConstraintCount = 0;
     
     polySphere; 
