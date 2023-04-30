@@ -395,7 +395,7 @@ MStatus SolverNode::compute(const MPlug& plug, MDataBlock& data) {
             cVertices,
             cIndices,
             clothHandle.child(stretchStiffness).asFloat(),
-            clothHandle.child(bendStiffness));
+            clothHandle.child(bendStiffness).asFloat());
 
         cPointArr.clear();
         cTriCountPerPoly.clear();
@@ -553,14 +553,14 @@ MTimeRange SolverNode::transformInvalidationRange(
   // animated, so it should be clean.
   MDataBlock data = const_cast<SolverNode*>(this)->forceCache();
   if (!data.isClean(simulationStartTime) || !data.isClean(simulationEnabled) ||
-      !data.isClean(softBodyArray) || !data.isClean(stepSize) ||
-      !data.isClean(substeps) || !data.isClean(iterations) ||
-      !data.isClean(collisionIterations) || !data.isClean(collisionDistance) ||
-      !data.isClean(collisionThickness) || !data.isClean(gridSpacing) ||
-      !data.isClean(gravity) || !data.isClean(damping) ||
-      !data.isClean(friction) || !data.isClean(floorHeight) ||
-      !data.isClean(threadCount) || !data.isClean(fixedRegionsArray) ||
-      !data.isClean(linkedRegionsArray)) {
+      !data.isClean(softBodyArray) || !data.isClean(clothArray) ||
+      !data.isClean(stepSize) || !data.isClean(substeps) ||
+      !data.isClean(iterations) || !data.isClean(collisionIterations) ||
+      !data.isClean(collisionDistance) || !data.isClean(collisionThickness) ||
+      !data.isClean(gridSpacing) || !data.isClean(gravity) ||
+      !data.isClean(damping) || !data.isClean(friction) ||
+      !data.isClean(floorHeight) || !data.isClean(threadCount) ||
+      !data.isClean(fixedRegionsArray) || !data.isClean(linkedRegionsArray)) {
     this->_resetSimulation = true;
     return MTimeRange{kMinimumTime, kMaximumTime};
   }
