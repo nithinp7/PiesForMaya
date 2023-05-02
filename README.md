@@ -4,6 +4,7 @@ Pies for Maya is a plugin integration of our soft-body physics engine Pies into 
 
 ## Highlights
 
+<img src="https://github.com/nithinp7/PiesForMaya/blob/main/Media/CoilingRope.gif">
 <img src="https://github.com/nithinp7/PiesForMaya/blob/main/Media/JellyGears.gif">
 <img src="https://github.com/nithinp7/PiesForMaya/blob/main/Media/CoilGears120.gif">
 

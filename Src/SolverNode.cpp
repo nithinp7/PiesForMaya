@@ -116,7 +116,7 @@ MObject SolverNode::outputPositions;
 MObject SolverNode::outputMesh;
 
 static void setupTestScene(Pies::Solver& solver) {
-  solver.createSheet(glm::vec3(0.0f, 20.0f, 0.0f), 1.0f, 1.0f, 1500.0f);
+  // solver.createSheet(glm::vec3(0.0f, 20.0f, 0.0f), 1.0f, 1.0f, 1500.0f);
 }
 
 SolverNode::SolverNode() {}
@@ -570,7 +570,7 @@ MStatus SolverNode::initialize() {
   MFnNumericAttribute stepSizeAttr;
   SolverNode::stepSize =
       stepSizeAttr
-          .create("stepSize", "step", MFnNumericData::kFloat, 0.012, &status);
+          .create("stepSize", "step", MFnNumericData::kFloat, 0.0461, &status);
   McheckErr(status, "ERROR creating attribute SolverNode::stepSize.");
 
   stepSizeAttr.setWritable(true);
@@ -580,7 +580,7 @@ MStatus SolverNode::initialize() {
   MFnNumericAttribute substepsAttr;
   SolverNode::substeps =
       substepsAttr
-          .create("substeps", "substeps", MFnNumericData::kInt, 1, &status);
+          .create("substeps", "substeps", MFnNumericData::kInt, 3, &status);
   McheckErr(status, "ERROR creating attribute SolverNode::substeps.");
 
   substepsAttr.setWritable(true);
