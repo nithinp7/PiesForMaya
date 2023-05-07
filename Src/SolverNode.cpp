@@ -631,7 +631,7 @@ MStatus SolverNode::initialize() {
       "collisionIterations",
       "cIters",
       MFnNumericData::kInt,
-      4,
+      0,
       &status);
   McheckErr(
       status,
