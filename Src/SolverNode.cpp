@@ -670,7 +670,7 @@ MStatus SolverNode::initialize() {
   MFnNumericAttribute gridSpacingAttr;
   SolverNode::gridSpacing =
       gridSpacingAttr
-          .create("gridSpacing", "grid", MFnNumericData::kFloat, 2.0, &status);
+          .create("gridSpacing", "grid", MFnNumericData::kFloat, 0.1, &status);
   McheckErr(status, "ERROR creating attribute SolverNode::gridSpacing.");
 
   gridSpacingAttr.setWritable(true);
@@ -719,7 +719,7 @@ MStatus SolverNode::initialize() {
   MFnNumericAttribute threadCountAttr;
   SolverNode::threadCount =
       threadCountAttr
-          .create("threadCount", "threads", MFnNumericData::kInt, 8, &status);
+          .create("threadCount", "threads", MFnNumericData::kInt, 12, &status);
   McheckErr(status, "ERROR creating attribute SolverNode::threadCount.");
 
   threadCountAttr.setWritable(true);
