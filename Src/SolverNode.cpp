@@ -48,6 +48,9 @@ MObject SolverNode::prevTime;
 MObject SolverNode::stepSize;
 
 /*static*/
+MObject SolverNode::substeps;
+
+/*static*/
 MObject SolverNode::iterations;
 
 /*static*/
@@ -64,8 +67,19 @@ MObject SolverNode::softBodyDensity;
 MObject SolverNode::softBodyVelocity;
 /*static*/
 MObject SolverNode::softBodyMesh;
+
 /*static*/
 MObject SolverNode::softBodyArray;
+
+/*static*/
+MObject SolverNode::stretchStiffness;
+/*static*/
+MObject SolverNode::bendStiffness;
+/*static*/
+MObject SolverNode::clothMesh;
+
+/*static*/
+MObject SolverNode::clothArray;
 
 /*static*/
 MObject SolverNode::collisionIterations;
@@ -134,6 +148,9 @@ MStatus SolverNode::compute(const MPlug& plug, MDataBlock& data) {
     MDataHandle stepSizeHandle = data.inputValue(stepSize, &status);
     McheckErr(status, "ERROR getting step size handle.");
 
+    MDataHandle substepsHandle = data.inputValue(substeps, &status);
+    McheckErr(status, "ERROR getting substeps handle.");
+
     MDataHandle itersHandle = data.inputValue(iterations, &status);
     McheckErr(status, "ERROR getting iterations handle.");
 
@@ -183,6 +200,10 @@ MStatus SolverNode::compute(const MPlug& plug, MDataBlock& data) {
         data.inputArrayValue(softBodyArray, &status);
     McheckErr(status, "ERROR getting softBodyArray handle.");
 
+    MArrayDataHandle clothArrayHandle =
+        data.inputArrayValue(clothArray, &status);
+    McheckErr(status, "ERROR getting clothArray handle.");
+
     MArrayDataHandle fixedRegionsHandle =
         data.inputArrayValue(fixedRegionsArray, &status);
     McheckErr(status, "ERROR getting fixedRegionsArray handle.");
@@ -203,8 +224,8 @@ MStatus SolverNode::compute(const MPlug& plug, MDataBlock& data) {
     std::vector<glm::mat4> fixedRegions;
     fixedRegions.resize(fixedRegionsHandle.elementCount());
     for (uint32_t regionIndex = 0;
-          regionIndex < fixedRegionsHandle.elementCount();
-          ++regionIndex) {
+         regionIndex < fixedRegionsHandle.elementCount();
+         ++regionIndex) {
       MMatrix regionMatrix =
           fixedRegionsHandle.inputValue().asMatrix().transpose();
 
@@ -236,6 +257,7 @@ MStatus SolverNode::compute(const MPlug& plug, MDataBlock& data) {
 
       Pies::SolverOptions options{};
       options.fixedTimestepSize = stepSizeHandle.asFloat();
+      options.timeSubsteps = substepsHandle.asInt();
       options.iterations = itersHandle.asInt();
       options.collisionStabilizationIterations = colItersHandle.asInt();
       options.collisionThresholdDistance = colDistHandle.asFloat();
@@ -320,10 +342,7 @@ MStatus SolverNode::compute(const MPlug& plug, MDataBlock& data) {
         this->_pSolver->addTriMeshVolume(
             vertices,
             indices,
-            glm::vec3(
-                velocity[0],
-                velocity[1],
-                velocity[2]),
+            glm::vec3(velocity[0], velocity[1], velocity[2]),
             softBodyHandle.child(softBodyDensity).asFloat(),
             softBodyHandle.child(strainStiffness).asFloat(),
             strainRangeValue[0],
@@ -338,6 +357,52 @@ MStatus SolverNode::compute(const MPlug& plug, MDataBlock& data) {
         vertices.clear();
         indices.clear();
         softBodyArrayHandle.next();
+      }
+
+      std::vector<glm::vec3> cVertices;
+      std::vector<uint32_t> cIndices;
+      MPointArray cPointArr;
+      MIntArray cTriCountPerPoly;
+      MIntArray cTriIndices;
+      for (uint32_t clothIndex = 0;
+           clothIndex < clothArrayHandle.elementCount();
+           ++clothIndex) {
+        MDataHandle clothHandle = clothArrayHandle.inputValue();
+        MDataHandle meshHandle = clothHandle.child(clothMesh);
+        const MMatrix& transform = meshHandle.geometryTransformMatrix();
+        MFnMesh mesh = meshHandle.asMesh();
+        mesh.getPoints(cPointArr, MSpace::kWorld);
+        mesh.getTriangles(cTriCountPerPoly, cTriIndices);
+        cVertices.resize(cPointArr.length());
+        cIndices.resize(cTriIndices.length());
+
+        for (uint32_t pointIndex = 0; pointIndex < cPointArr.length();
+             ++pointIndex) {
+          MPoint point = cPointArr[pointIndex];
+          cVertices[pointIndex] = glm::vec3(
+              static_cast<float>(point.x),
+              static_cast<float>(point.y),
+              static_cast<float>(point.z));
+        }
+
+        for (uint32_t i = 0; i < cTriIndices.length(); i += 3) {
+          cIndices[i] = static_cast<uint32_t>(cTriIndices[i]);
+          cIndices[i + 1] = static_cast<uint32_t>(cTriIndices[i + 1]);
+          cIndices[i + 2] = static_cast<uint32_t>(cTriIndices[i + 2]);
+        }
+
+        this->_pSolver->addClothMesh(
+            cVertices,
+            cIndices,
+            clothHandle.child(stretchStiffness).asFloat(),
+            clothHandle.child(bendStiffness).asFloat());
+
+        cPointArr.clear();
+        cTriCountPerPoly.clear();
+        cTriIndices.clear();
+        cVertices.clear();
+        cIndices.clear();
+        clothArrayHandle.next();
       }
 
       this->_pSolver->addFixedRegions(fixedRegions, 1000.0f);
@@ -488,7 +553,8 @@ MTimeRange SolverNode::transformInvalidationRange(
   // animated, so it should be clean.
   MDataBlock data = const_cast<SolverNode*>(this)->forceCache();
   if (!data.isClean(simulationStartTime) || !data.isClean(simulationEnabled) ||
-      !data.isClean(softBodyArray) || !data.isClean(stepSize) ||
+      !data.isClean(softBodyArray) || !data.isClean(clothArray) ||
+      !data.isClean(stepSize) || !data.isClean(substeps) ||
       !data.isClean(iterations) || !data.isClean(collisionIterations) ||
       !data.isClean(collisionDistance) || !data.isClean(collisionThickness) ||
       !data.isClean(gridSpacing) || !data.isClean(gravity) ||
@@ -571,6 +637,16 @@ MStatus SolverNode::initialize() {
   stepSizeAttr.setWritable(true);
   status = addAttribute(SolverNode::stepSize);
   McheckErr(status, "ERROR adding attribute SolverNode::stepSize.");
+
+  MFnNumericAttribute substepsAttr;
+  SolverNode::substeps =
+      substepsAttr
+          .create("substeps", "substeps", MFnNumericData::kInt, 1, &status);
+  McheckErr(status, "ERROR creating attribute SolverNode::substeps.");
+
+  substepsAttr.setWritable(true);
+  status = addAttribute(SolverNode::substeps);
+  McheckErr(status, "ERROR adding attribute SolverNode::substeps.");
 
   MFnNumericAttribute itersAttr;
   SolverNode::iterations =
@@ -815,6 +891,55 @@ MStatus SolverNode::initialize() {
   status = addAttribute(SolverNode::softBodyArray);
   McheckErr(status, "ERROR adding compound SoftBody attribute.");
 
+  // Cloth meshes (compound attribute array)
+
+  MFnNumericAttribute stretchStiffnessAttr;
+  SolverNode::stretchStiffness = stretchStiffnessAttr.create(
+      "stretchStiffness",
+      "stretchStiff",
+      MFnNumericData::kFloat,
+      1000.0,
+      &status);
+  McheckErr(status, "ERROR creating attribute SolverNode::stretchStiffness.");
+
+  MFnNumericAttribute bendStiffnessAttr;
+  SolverNode::bendStiffness = bendStiffnessAttr.create(
+      "bendStiffness",
+      "bendStiff",
+      MFnNumericData::kFloat,
+      1000.0,
+      &status);
+  McheckErr(status, "ERROR creating attribute SolverNode::bendStiffness.");
+
+  // inMesh reused from soft body compound attr
+  MFnTypedAttribute cInMeshAttr;
+  SolverNode::clothMesh = cInMeshAttr.create(
+      "clothMesh",
+      "cm",
+      MFnData::kMesh,
+      MObject::kNullObj,
+      &status);
+  McheckErr(status, "ERROR creating attribute SolverNode::cInMesh.");
+
+  // compoundAttr reused from soft body compound attr
+  MFnCompoundAttribute cCompoundAttr;
+  SolverNode::clothArray =
+      cCompoundAttr.create("clothArray", "cArray", &status);
+  McheckErr(status, "ERROR creating attribute SolverNode::outCompound.");
+  status = cCompoundAttr.addChild(SolverNode::stretchStiffness);
+  McheckErr(status, "ERROR adding compound children.");
+  status = cCompoundAttr.addChild(SolverNode::bendStiffness);
+  McheckErr(status, "ERROR adding compound children.");
+  status = cCompoundAttr.addChild(SolverNode::clothMesh);
+  McheckErr(status, "ERROR adding compound children.");
+
+  cCompoundAttr.setWritable(true);
+  cCompoundAttr.setArray(true);
+  cCompoundAttr.setIndexMatters(false);
+  // TODO: setDisconnectBehavior??
+  status = addAttribute(SolverNode::clothArray);
+  McheckErr(status, "ERROR adding compound Cloth attribute.");
+
   // Output attributes
 
   MFnTypedAttribute outputPositionsAttr;
@@ -856,6 +981,9 @@ MStatus SolverNode::initialize() {
   status = attributeAffects(stepSize, outputPositions);
   McheckErr(status, "ERROR attributeAffects(stepSize, outputPositions).");
 
+  status = attributeAffects(substeps, outputPositions);
+  McheckErr(status, "ERROR attributeAffects(substeps, outputPositions).");
+
   status = attributeAffects(iterations, outputPositions);
   McheckErr(status, "ERROR attributeAffects(iterations, outputPositions).");
 
@@ -870,9 +998,10 @@ MStatus SolverNode::initialize() {
       "ERROR attributeAffects(simulationStartTime, outputPositions).");
 
   status = attributeAffects(softBodyArray, outputPositions);
-  McheckErr(
-      status,
-      "ERROR attributeAffects(simulationStartTime, outputPositions).");
+  McheckErr(status, "ERROR attributeAffects(softBodyArray, outputPositions).");
+
+  status = attributeAffects(clothArray, outputPositions);
+  McheckErr(status, "ERROR attributeAffects(clothArray, outputPositions).");
 
   status = attributeAffects(collisionIterations, outputPositions);
   McheckErr(
@@ -935,6 +1064,9 @@ MStatus SolverNode::initialize() {
 
   status = attributeAffects(softBodyArray, outputMesh);
   McheckErr(status, "ERROR attributeAffects(simulationStartTime, outputMesh).");
+
+  status = attributeAffects(clothArray, outputMesh);
+  McheckErr(status, "ERROR attributeAffects(clothArray, outputMesh).");
 
   status = attributeAffects(collisionIterations, outputMesh);
   McheckErr(status, "ERROR attributeAffects(collisionIterations, outputMesh).");

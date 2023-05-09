@@ -36,6 +36,7 @@ public:
   static MObject prevTime;
 
   static MObject stepSize;
+  static MObject substeps;
   static MObject iterations;
 
   // Soft body compound attribute
@@ -47,6 +48,12 @@ public:
   static MObject softBodyVelocity;
   static MObject softBodyMesh;
   static MObject softBodyArray;
+
+  // Cloth compound attribute
+  static MObject stretchStiffness;
+  static MObject bendStiffness;
+  static MObject clothMesh;
+  static MObject clothArray;
   
   static MObject collisionIterations;
   static MObject collisionDistance;

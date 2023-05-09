@@ -28,6 +28,7 @@ global proc int addPiesConstraint() {
 
 global proc int createPiesSolver() {
     global int $piesMeshCount;
+    global int $piesClothCount;
     global int $piesConstraintCount;
     global string $piesSolver;
 
@@ -36,6 +37,7 @@ global proc int createPiesSolver() {
     }
     
     $piesMeshCount = 0;
+    $piesClothCount = 0;
     $piesConstraintCount = 0;
     
     // polySphere; 
@@ -58,15 +60,35 @@ global proc int addPiesMesh() {
     global int $piesMeshCount;
     global string $piesSolver;
     
-    string $obj[] = `ls -sl`;
-    string $shapeNames[] = `listRelatives -s $obj[0]`;
+    string $objs[] = `ls -sl`;
+    for ($obj in $objs) {
+      string $shapeNames[] = `listRelatives -s $obj`;
+      for ($shapeName in $shapeNames) {
+          string $softBody = `createNode PiesSoftBodyNode -n "PiesSoftBody#"`;
+      
+          connectAttr ($shapeName + ".worldMesh") ($softBody + ".inMesh");
+          connectAttr ($softBody + ".output") ($piesSolver + ".softBodyArray[" + string($piesMeshCount) + "]");
+          $piesMeshCount = $piesMeshCount + 1;
+      }
+    }
     
-    for ($shapeName in $shapeNames) {
-        string $softBody = `createNode PiesSoftBodyNode -n "PiesSoftBody#"`;
+    return true;
+}
+
+global proc int addPiesCloth() {
+    global int $piesClothCount;
+    global string $piesSolver;
     
-        connectAttr ($shapeName + ".worldMesh") ($softBody + ".inMesh");
-        connectAttr ($softBody + ".output") ($piesSolver + ".softBodyArray[" + string($piesMeshCount) + "]");
-        $piesMeshCount = $piesMeshCount + 1;
+    string $objs[] = `ls -sl`;
+    for ($obj in $objs) {
+      string $shapeNames[] = `listRelatives -s $obj`;
+      for ($shapeName in $shapeNames) {
+          string $cloth = `createNode PiesClothNode -n "PiesCloth#"`;
+      
+          connectAttr ($shapeName + ".worldMesh") ($cloth + ".inMesh");
+          connectAttr ($cloth + ".output") ($piesSolver + ".clothArray[" + string($piesClothCount) + "]");
+          $piesClothCount = $piesClothCount + 1;
+      }
     }
     
     return true;
