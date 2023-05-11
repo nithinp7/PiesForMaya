@@ -1,6 +1,7 @@
 #include "SolverNode.h"
 
 #include <Pies/Solver.h>
+#include <omp.h>
 #include <maya/MDataHandle.h>
 #include <maya/MFnArrayAttrsData.h>
 #include <maya/MFnCompoundAttribute.h>
@@ -719,7 +720,7 @@ MStatus SolverNode::initialize() {
   MFnNumericAttribute threadCountAttr;
   SolverNode::threadCount =
       threadCountAttr
-          .create("threadCount", "threads", MFnNumericData::kInt, 12, &status);
+          .create("threadCount", "threads", MFnNumericData::kInt, 16, &status);
   McheckErr(status, "ERROR creating attribute SolverNode::threadCount.");
 
   threadCountAttr.setWritable(true);
@@ -939,6 +940,9 @@ MStatus SolverNode::initialize() {
   // Setup input-output dependencies
   status = attributeAffects(time, outputMesh);
   McheckErr(status, "ERROR attributeAffects(time, outputMesh).");
+
+  status = attributeAffects(substeps, outputMesh);
+  McheckErr(status, "ERROR attributeAffects(substeps, outputMesh).");
 
   status = attributeAffects(stepSize, outputMesh);
   McheckErr(status, "ERROR attributeAffects(stepSize, outputMesh).");
