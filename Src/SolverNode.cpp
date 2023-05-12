@@ -647,7 +647,7 @@ MStatus SolverNode::initialize() {
       "collisionDistance",
       "cDist",
       MFnNumericData::kFloat,
-      0.1,
+      0.01,
       &status);
   McheckErr(status, "ERROR creating attribute SolverNode::collisionDistance.");
 
@@ -660,7 +660,7 @@ MStatus SolverNode::initialize() {
       "collisionThickness",
       "cThick",
       MFnNumericData::kFloat,
-      0.05,
+      0.01,
       &status);
   McheckErr(status, "ERROR creating attribute SolverNode::collisionThickness.");
 
@@ -671,7 +671,7 @@ MStatus SolverNode::initialize() {
   MFnNumericAttribute gridSpacingAttr;
   SolverNode::gridSpacing =
       gridSpacingAttr
-          .create("gridSpacing", "grid", MFnNumericData::kFloat, 0.1, &status);
+          .create("gridSpacing", "grid", MFnNumericData::kFloat, 0.4, &status);
   McheckErr(status, "ERROR creating attribute SolverNode::gridSpacing.");
 
   gridSpacingAttr.setWritable(true);
