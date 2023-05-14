@@ -1,5 +1,5 @@
-#include "SolverNode.h"
 #include "PiesSoftBodyNode.h"
+#include "SolverNode.h"
 
 #include <maya/MArgList.h>
 #include <maya/MDGModifier.h>
@@ -48,7 +48,7 @@ MStatus initializePlugin(MObject obj) {
     status.perror("registerNode");
     return status;
   }
-  
+
   status = plugin.registerNode(
       "PiesSoftBodyNode",
       PiesSoftBodyNode::id,
@@ -77,6 +77,6 @@ MStatus uninitializePlugin(MObject obj) {
     status.perror("deregisterNode");
     return status;
   }
-  
+
   return status;
 }
