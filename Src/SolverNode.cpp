@@ -778,7 +778,7 @@ MStatus SolverNode::initialize() {
   MFnNumericAttribute strainRangeAttr;
   SolverNode::strainRange =
       strainRangeAttr.create("strainRange", "strainR", MFnNumericData::k2Float);
-  strainRangeAttr.setDefault(0.8f, 1.0f);
+  strainRangeAttr.setDefault(1.0f, 1.0f);
 
   MFnNumericAttribute volStiffnessAttr;
   SolverNode::volStiffness = volStiffnessAttr.create(
@@ -792,7 +792,7 @@ MStatus SolverNode::initialize() {
   MFnNumericAttribute volRangeAttr;
   SolverNode::volRange =
       volRangeAttr.create("volRange", "volRange", MFnNumericData::k2Float);
-  volRangeAttr.setDefault(1.0f, 1.0f);
+  volRangeAttr.setDefault(0.5f, 1.5f);
 
   MFnNumericAttribute softBodyDensityAttr;
   SolverNode::softBodyDensity = softBodyDensityAttr.create(

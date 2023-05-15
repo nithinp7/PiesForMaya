@@ -140,7 +140,7 @@ MStatus PiesSoftBodyNode::initialize() {
   PiesSoftBodyNode::strainRange =
       strainRangeAttr.create("strainRange", "strainR", MFnNumericData::k2Float);
 
-  strainRangeAttr.setDefault(0.8f, 1.0f);
+  strainRangeAttr.setDefault(1.0f, 1.0f);
   strainRangeAttr.setWritable(true);
   strainRangeAttr.setKeyable(false);
   status = addAttribute(PiesSoftBodyNode::strainRange);
@@ -163,7 +163,7 @@ MStatus PiesSoftBodyNode::initialize() {
   MFnNumericAttribute volRangeAttr;
   PiesSoftBodyNode::volRange =
       volRangeAttr.create("volRange", "volRange", MFnNumericData::k2Float);
-  volRangeAttr.setDefault(1.0f, 1.0f);
+  volRangeAttr.setDefault(0.5f, 1.5f);
   volRangeAttr.setWritable(true);
   volRangeAttr.setKeyable(false);
   status = addAttribute(PiesSoftBodyNode::volRange);
