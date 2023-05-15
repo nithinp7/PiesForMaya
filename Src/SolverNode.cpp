@@ -34,6 +34,9 @@
   }
 
 /*static*/
+CUcontext SolverNode::PiesCudaContext;
+
+/*static*/
 MString SolverNode::pluginDir;
 
 /*static*/
@@ -352,7 +355,12 @@ MStatus SolverNode::compute(const MPlug& plug, MDataBlock& data) {
     if (simulationEnabledValue && this->_simulationTime < timeSeconds) {
       this->_pSolver->updateFixedRegions(fixedRegions);
 
+      // Pies uses CUDA, so we push a new CUDA context to protect any CUDA
+      // tasks that may be happening in Maya
+      cuCtxPushCurrent(SolverNode::PiesCudaContext);
       this->_pSolver->tick(stepSizeHandle.asFloat());
+      cuCtxPopCurrent(0);
+
       this->_simulationTime = timeSeconds;
 
       MFnArrayAttrsData particlesAAD;
@@ -581,7 +589,7 @@ MStatus SolverNode::initialize() {
   MFnNumericAttribute substepsAttr;
   SolverNode::substeps =
       substepsAttr
-          .create("substeps", "substeps", MFnNumericData::kInt, 3, &status);
+          .create("substeps", "substeps", MFnNumericData::kInt, 1, &status);
   McheckErr(status, "ERROR creating attribute SolverNode::substeps.");
 
   substepsAttr.setWritable(true);
@@ -591,7 +599,7 @@ MStatus SolverNode::initialize() {
   MFnNumericAttribute itersAttr;
   SolverNode::iterations =
       itersAttr
-          .create("iterations", "iters", MFnNumericData::kInt, 4, &status);
+          .create("iterations", "iters", MFnNumericData::kInt, 15, &status);
   McheckErr(status, "ERROR creating attribute SolverNode::iterations.");
 
   itersAttr.setWritable(true);

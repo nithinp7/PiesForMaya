@@ -1,6 +1,8 @@
 #include "PiesSoftBodyNode.h"
 #include "SolverNode.h"
 
+#include <cuda.h>
+
 #include <maya/MArgList.h>
 #include <maya/MDGModifier.h>
 #include <maya/MDoubleArray.h>
@@ -22,6 +24,8 @@
 #include <iostream>
 #include <list>
 
+static CUcontext PiesCudaContext;
+
 MStatus initializePlugin(MObject obj) {
   MStatus status = MStatus::kSuccess;
   MFnPlugin plugin(obj, "PiesForMayaPlugin", "1.0", "Any");
@@ -31,6 +35,17 @@ MStatus initializePlugin(MObject obj) {
     status.perror("loadPath");
     return status;
   }
+
+  // TODO: Eventually implement persistent threaded cuda context...
+  // See:
+  // https://www.nvidia.com.tw/content/apacevents/siggraph-asia-2012/developing-an-optimized-maya-plugin-using-cuda-and-opengl-WBraithwaite.pdf
+  CUdevice dev;
+  // TODO: Double check this is picking the discrete GPU
+  cuDeviceGet(&dev, 0);
+  cuCtxCreate(&PiesCudaContext, 0, dev);
+  cuCtxPopCurrent(0);
+
+  SolverNode::PiesCudaContext = PiesCudaContext;
 
   std::string pluginPath(SolverNode::pluginDir.asChar());
 
@@ -65,6 +80,9 @@ MStatus initializePlugin(MObject obj) {
 MStatus uninitializePlugin(MObject obj) {
   MStatus status = MStatus::kSuccess;
   MFnPlugin plugin(obj);
+
+  cuCtxPushCurrent(PiesCudaContext);
+  cuCtxDestroy(PiesCudaContext);
 
   status = plugin.deregisterNode(SolverNode::id);
   if (!status) {

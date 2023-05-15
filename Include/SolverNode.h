@@ -9,6 +9,8 @@
 #include <maya/MString.h>
 #include <maya/MTypeId.h>
 
+#include <cuda.h>
+
 #include <memory>
 #include <string>
 
@@ -29,6 +31,8 @@ public:
 
   static void* creator();
   static MStatus initialize();
+
+  static CUcontext PiesCudaContext;
 
   static MString pluginDir;
   static MTypeId id;
